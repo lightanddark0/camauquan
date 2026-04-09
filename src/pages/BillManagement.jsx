@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useApp } from '../context/AppContext';
-import { Calendar, FileText, Eye, ChevronDown, ChevronUp, Edit, CheckCircle, Clock, ExternalLink, DollarSign, TrendingUp, Package, ChefHat, RotateCcw, ArrowLeftRight, X } from 'lucide-react';
+import { Calendar, FileText, Eye, ChevronDown, ChevronUp, Edit, CheckCircle, Clock, ExternalLink, DollarSign, TrendingUp, Package, ChefHat, RotateCcw, ArrowLeftRight, X, Printer } from 'lucide-react';
 import CustomerPageModal from '../components/CustomerPageModal';
 import { toast } from 'react-toastify';
 import { getBillCostTotalsForReport } from '../utils/billCostTotals';
 import EditBill from '../components/EditBill';
 import KitchenManagement from '../components/KitchenManagement';
+import PrintReceipt from '../components/PrintReceipt';
 
 const BillManagement = () => {
   const { menuItems, orderItems, tables } = useApp();
@@ -21,6 +22,7 @@ const BillManagement = () => {
   const [showPublicBillModal, setShowPublicBillModal] = useState(false);
   const [showKitchenModal, setShowKitchenModal] = useState(false);
   const [changingTableBill, setChangingTableBill] = useState(null);
+  const [printBill, setPrintBill] = useState(null); // bill to print
 
   useEffect(() => {
     const q = query(
@@ -92,6 +94,29 @@ const BillManagement = () => {
     });
   };
 
+  // Build simplified items list for printing from a bill
+  const buildItemsForPrint = (bill) => {
+    if (!bill?.items) return [];
+    return bill.items
+      .filter(item => item && (item.menuItemId || item.orderItemId || item.customDescription))
+      .map(item => {
+        if (item.menuItemId) {
+          const m = menuItems.find(m => m.id === item.menuItemId);
+          return { name: m?.name || 'Món ăn', quantity: item.quantity || 1, price: m?.price || 0 };
+        }
+        if (item.orderItemId) {
+          const oi = orderItems.find(o => o.id === item.orderItemId);
+          const parent = oi?.parentMenuItemId ? menuItems.find(m => m.id === oi.parentMenuItemId) : null;
+          return { name: oi?.name || 'Món ăn', quantity: item.quantity || 1, price: parent?.price ?? oi?.price ?? 0 };
+        }
+        if (item.customDescription) {
+          return { name: item.customDescription, quantity: item.quantity || 1, price: item.customAmount || 0 };
+        }
+        return null;
+      })
+      .filter(Boolean);
+  };
+
   const handleMarkAsPaid = async (bill) => {
     if (processingPayment === bill.id) return;
     
@@ -112,6 +137,8 @@ const BillManagement = () => {
             position: "top-right",
             autoClose: 2000,
           });
+          // Trigger print after payment
+          setPrintBill({ ...bill, status: 'paid', paidAt: new Date() });
         } catch (error) {
           console.error('Error marking bill as paid:', error);
           toast.error('Có lỗi xảy ra khi cập nhật trạng thái thanh toán', {
@@ -571,6 +598,14 @@ const BillManagement = () => {
                         <span className="hidden sm:inline">Sửa</span>
                       </button>
                       <button
+                        onClick={() => setPrintBill(bill)}
+                        className="flex items-center gap-1 px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md border border-gray-300 transition-colors"
+                        title="In hóa đơn"
+                      >
+                        <Printer size={16} />
+                        <span className="hidden sm:inline">In</span>
+                      </button>
+                      <button
                         onClick={() => handleViewDetails(bill)}
                         className="flex items-center gap-1 px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-md border border-gray-200 transition-colors"
                         title="Xem chi tiết"
@@ -838,6 +873,15 @@ const BillManagement = () => {
             </div>
           </div>
         </div>
+      )}
+      {/* Auto-print receipt after payment */}
+      {printBill && (
+        <PrintReceipt
+          trigger="auto"
+          bill={printBill}
+          items={buildItemsForPrint(printBill)}
+          onPrinted={() => setPrintBill(null)}
+        />
       )}
     </div>
   );
