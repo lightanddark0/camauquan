@@ -8,7 +8,7 @@ import { calculateKitchenQueue, filterByTable, calculateKitchenStats } from '../
  * Custom hook để quản lý đơn hàng bếp real-time
  */
 export const useKitchenOrders = (selectedTable = null, selectedDate = null) => {
-  const { tables } = useApp();
+  const { tables, menuItems } = useApp();
   const [bills, setBills] = useState([]);
   const [menuTimings, setMenuTimings] = useState([]);
   const [orderItems, setOrderItems] = useState([]);
@@ -31,17 +31,15 @@ export const useKitchenOrders = (selectedTable = null, selectedDate = null) => {
     const billsQuery = query(
       collection(db, 'bills'),
       where('date', '==', dateToUse),
-      where('status', 'in', ['pending', 'in_progress']),
       orderBy('createdAt', 'desc')
     );
 
     const unsubscribeBills = onSnapshot(
       billsQuery,
       (snapshot) => {
-        const billsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+        const billsData = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(bill => bill.status === 'pending' || bill.status === 'in_progress');
         setBills(billsData);
         setLoading(false);
       },
@@ -104,7 +102,7 @@ export const useKitchenOrders = (selectedTable = null, selectedDate = null) => {
   useEffect(() => {
     if (!loading && orderItems.length >= 0) {
       try {
-        const queue = calculateKitchenQueue(bills, menuTimings, orderItems);
+        const queue = calculateKitchenQueue(bills, menuTimings, orderItems, menuItems);
         setKitchenQueue(queue);
 
         const filtered = filterByTable(queue, selectedTable);

@@ -8,10 +8,14 @@ import CustomItemForm from './CustomItemForm';
 
 const CATEGORIES = [
   { id: 'oc', name: 'Ốc', emoji: '🐚' },
-  { id: 'an_no', name: 'Ăn no', emoji: '🍜' },
-  { id: 'an_choi', name: 'Ăn chơi', emoji: '🍢' },
-  { id: 'lai_rai', name: 'Lai rai', emoji: '🥜' },
-  { id: 'giai_khat', name: 'Giải khát', emoji: '🧊' },
+  { id: 'hai_san', name: 'Hải sản', emoji: '🦐' },
+  { id: 'mon_ca', name: 'Món cá', emoji: '🐟' },
+  { id: 'khai_vi', name: 'Khai vị', emoji: '🥟' },
+  { id: 'com_mi', name: 'Cơm - Mì', emoji: '🍜' },
+  { id: 'mon_thit', name: 'Món thịt', emoji: '🥩' },
+  { id: 'lau', name: 'Lẩu', emoji: '🍲' },
+  { id: 'mon_them', name: 'Món thêm', emoji: '🥬' },
+  { id: 'giai_khat', name: 'Giải khát', emoji: '🍺' },
 ];
 
 const EditBill = ({ bill, onClose, onUpdated }) => {

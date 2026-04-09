@@ -64,7 +64,7 @@ export const calculateEstimatedTime = (item, timing) => {
  * @param {Array} orderItems - Danh sách order items (FALLBACK SOURCE)
  * @returns {Array} - Danh sách món đã sắp xếp theo ưu tiên
  */
-export const calculateKitchenQueue = (bills, menuTimings = [], orderItems = []) => {
+export const calculateKitchenQueue = (bills, menuTimings = [], orderItems = [], menuItems = []) => {
   const currentTime = new Date();
 
   // Map timing từ menuItemTimings (nguồn chính, do admin customize) — chỉ dùng orderItemId
@@ -77,6 +77,12 @@ export const calculateKitchenQueue = (bills, menuTimings = [], orderItems = []) 
   const orderItemsMap = new Map();
   orderItems.forEach(item => {
     orderItemsMap.set(item.id, item);
+  });
+
+  // Map menuItems để lookup nhanh theo ID
+  const menuItemsMap = new Map();
+  menuItems.forEach(item => {
+    menuItemsMap.set(item.id, item);
   });
   
   // Flatten tất cả items từ bills và thêm thông tin cần thiết
@@ -119,8 +125,9 @@ export const calculateKitchenQueue = (bills, menuTimings = [], orderItems = []) 
             ];
           }
 
-          // Tìm orderItem theo orderItemId
+          // Tìm orderItem theo orderItemId, hoặc menuItem theo menuItemId
           const orderItem = orderItemsMap.get(item.orderItemId);
+          const menuItem = menuItemsMap.get(item.menuItemId);
 
           // Tìm timing: ưu tiên menuItemTimings (admin customize), fallback sang orderItem
           const menuTiming = timingMap.get(item.orderItemId);
@@ -145,7 +152,7 @@ export const calculateKitchenQueue = (bills, menuTimings = [], orderItems = []) 
           const result = [];
           const isAdded = !!item.addedAt;
           const itemCreatedAt = item.addedAt ? new Date(item.addedAt) : bill.createdAt;
-          const itemName = orderItem?.name || item.name || `Món ID: ${item.orderItemId}`;
+          const itemName = orderItem?.name || menuItem?.name || item.name || `Món ID: ${item.orderItemId || item.menuItemId}`;
 
           // Thêm món đã hoàn thành (hiển thị với status "ready")
           for (let i = 0; i < completedCount; i++) {

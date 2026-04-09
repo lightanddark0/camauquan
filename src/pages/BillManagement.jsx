@@ -53,6 +53,14 @@ const BillManagement = () => {
       
       setBills(sortedBills);
       setLoading(false);
+    }, (error) => {
+      console.error('Error loading bills:', error);
+      if (error.message?.includes('index')) {
+        toast.error('Cần tạo Firestore index. Xem Console (F12) để lấy link tạo index.');
+      } else {
+        toast.error('Lỗi tải đơn hàng: ' + error.message);
+      }
+      setLoading(false);
     });
 
     return () => unsubscribe();

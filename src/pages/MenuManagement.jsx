@@ -42,17 +42,26 @@ async function uploadToCloudinary(file) {
 // Categories for menu items
 const CATEGORIES = [
   { value: 'oc', label: 'Ốc' },
-  { value: 'an_no', label: 'Ăn no' },
-  { value: 'an_choi', label: 'Ăn chơi' },
-  { value: 'lai_rai', label: 'Lai rai' },
+  { value: 'hai_san', label: 'Hải sản' },
+  { value: 'mon_ca', label: 'Món cá' },
+  { value: 'khai_vi', label: 'Khai vị' },
+  { value: 'com_mi', label: 'Cơm - Mì' },
+  { value: 'mon_thit', label: 'Món thịt' },
+  { value: 'lau', label: 'Lẩu' },
+  { value: 'mon_them', label: 'Món thêm' },
   { value: 'giai_khat', label: 'Giải khát' }
 ];
 
-// Categories for order items (simplified)
+// Categories for order items
 const ORDER_CATEGORIES = [
   { value: 'oc', label: 'Ốc' },
-  { value: 'an_no', label: 'Ăn no' },
-  { value: 'an_choi', label: 'Ăn chơi' },
+  { value: 'hai_san', label: 'Hải sản' },
+  { value: 'mon_ca', label: 'Món cá' },
+  { value: 'khai_vi', label: 'Khai vị' },
+  { value: 'com_mi', label: 'Cơm - Mì' },
+  { value: 'mon_thit', label: 'Món thịt' },
+  { value: 'lau', label: 'Lẩu' },
+  { value: 'mon_them', label: 'Món thêm' },
   { value: 'giai_khat', label: 'Giải khát' }
 ];
 

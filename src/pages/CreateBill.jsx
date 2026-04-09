@@ -12,9 +12,13 @@ import CustomItemForm from '../components/CustomItemForm';
 // Categories for menu items
 const CATEGORIES = [
   { value: 'oc', label: 'Ốc' },
-  { value: 'an_no', label: 'Ăn no' },
-  { value: 'an_choi', label: 'Ăn chơi' },
-  { value: 'lai_rai', label: 'Lai rai' },
+  { value: 'hai_san', label: 'Hải sản' },
+  { value: 'mon_ca', label: 'Món cá' },
+  { value: 'khai_vi', label: 'Khai vị' },
+  { value: 'com_mi', label: 'Cơm - Mì' },
+  { value: 'mon_thit', label: 'Món thịt' },
+  { value: 'lau', label: 'Lẩu' },
+  { value: 'mon_them', label: 'Món thêm' },
   { value: 'giai_khat', label: 'Giải khát' },
   { value: 'all', label: 'Tất cả' }
 ];
