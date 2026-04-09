@@ -76,7 +76,7 @@ const TableQRCode = ({ table, baseUrl }) => {
         </head>
         <body>
           <div class="qr-container">
-            <div class="restaurant-name">QUÁN ỐC</div>
+            <div class="restaurant-name">CÀ MAU QUÁN</div>
             <div class="table-info">
               <div class="table-number">BÀN ${table.number}</div>
               <div class="table-seats">${table.seats} chỗ ngồi</div>

@@ -36,104 +36,105 @@ const PrintReceipt = ({ bill, items, trigger = 'button', onPrinted }) => {
       body {
         margin: 0; padding: 0;
         font-family: 'Courier New', Courier, monospace;
-        font-size: 14px;
+        font-size: 15px;
         color: #000;
-        line-height: 1.4;
+        line-height: 1.5;
       }
-      .receipt { width: 78mm; padding: 5mm 3mm 8mm; }
-      .center { text-align: center; }
+      .receipt { width: 76mm; padding: 4mm 3mm 10mm; }
       .shop-name {
-        font-size: 22px;
+        font-size: 20px;
         font-weight: bold;
         text-align: center;
-        letter-spacing: 2px;
-        margin-bottom: 2px;
+        letter-spacing: 1px;
+        margin-bottom: 1px;
       }
-      .tagline { font-size: 12px; text-align: center; color: #333; margin-bottom: 3px; }
-      .info { font-size: 12px; text-align: center; }
-      .divider-solid { border-top: 2px solid #000; margin: 5px 0; }
-      .divider { border-top: 1px dashed #000; margin: 5px 0; }
-      .bill-label { font-size: 18px; font-weight: bold; text-align: center; margin: 4px 0 2px; }
-      .bill-time { font-size: 12px; text-align: center; color: #333; margin-bottom: 2px; }
-      .col-header {
-        display: flex;
-        font-size: 13px;
+      .tagline { font-size: 13px; text-align: center; margin-bottom: 2px; }
+      .info { font-size: 13px; text-align: center; }
+      .bill-label { font-size: 16px; font-weight: bold; text-align: center; margin: 3px 0 1px; }
+      .bill-time { font-size: 13px; text-align: center; margin-bottom: 2px; }
+      .divider-solid { border: none; border-top: 2px solid #000; margin: 4px 0; }
+      .divider { border: none; border-top: 1px dashed #000; margin: 4px 0; }
+      table { width: 100%; border-collapse: collapse; }
+      thead th {
+        font-size: 14px;
         font-weight: bold;
-        padding: 3px 0;
+        padding: 3px 2px;
         border-bottom: 1px solid #000;
-        margin-bottom: 2px;
       }
-      .col-header .h-name { flex: 1; }
-      .col-header .h-qty { width: 28px; text-align: right; }
-      .col-header .h-price { width: 76px; text-align: right; }
-      .item-row { display: flex; align-items: flex-start; padding: 3px 0; }
-      .item-row .i-name { flex: 1; font-size: 14px; word-break: break-word; padding-right: 4px; }
-      .item-row .i-qty { width: 28px; text-align: right; font-size: 14px; }
-      .item-row .i-price { width: 76px; text-align: right; font-size: 14px; }
-      .unit-price { font-size: 11px; color: #555; text-align: right; padding-bottom: 2px; }
-      .total-section { margin-top: 4px; }
-      .total-row {
-        display: flex;
-        justify-content: space-between;
+      thead th.c-name { text-align: left; }
+      thead th.c-qty  { text-align: right; width: 24px; }
+      thead th.c-price{ text-align: right; width: 72px; }
+      tbody td { font-size: 15px; padding: 3px 2px 1px; vertical-align: top; }
+      tbody td.c-name { text-align: left; word-break: break-word; }
+      tbody td.c-qty  { text-align: right; width: 24px; }
+      tbody td.c-price{ text-align: right; width: 72px; white-space: nowrap; }
+      .unit-price { font-size: 12px; color: #444; text-align: right; padding: 0 2px 3px; }
+      .total-row td {
         font-size: 17px;
         font-weight: bold;
-        padding: 4px 0;
+        padding: 4px 2px;
+        border-top: 2px solid #000;
       }
-      .footer1 { font-size: 14px; font-weight: bold; text-align: center; margin-top: 6px; }
-      .footer2 { font-size: 12px; text-align: center; margin-top: 2px; }
+      .footer1 { font-size: 15px; font-weight: bold; text-align: center; margin-top: 8px; }
+      .footer2 { font-size: 13px; text-align: center; margin-top: 2px; }
     `;
 
-    const receiptHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8"/>
-          <style>\${style}</style>
-        </head>
-        <body>
-          <div class="receipt">
-            <div class="shop-name">${SHOP_NAME}</div>
-            ${SHOP_TAGLINE ? `<div class="tagline">${SHOP_TAGLINE}</div>` : ''}
-            ${SHOP_ADDRESS ? `<div class="info">${SHOP_ADDRESS}</div>` : ''}
-            ${SHOP_PHONE ? `<div class="info">SĐT: ${SHOP_PHONE}</div>` : ''}
-            <div class="divider-solid"></div>
-            <div class="bill-label">${billLabel}</div>
-            <div class="bill-time">${formatTime(bill?.paidAt || bill?.createdAt)}</div>
-            <div class="divider"></div>
-            <div class="col-header">
-              <span class="h-name">Tên món</span>
-              <span class="h-qty">SL</span>
-              <span class="h-price">Tiền</span>
-            </div>
-            ${items.map(item => {
-              const qty = typeof item.quantity === 'number' && item.quantity % 1 !== 0
-                ? item.quantity.toFixed(1)
-                : item.quantity;
-              const total = (item.price || 0) * item.quantity;
-              return `
-                <div class="item-row">
-                  <span class="i-name">${item.name || 'Món khác'}</span>
-                  <span class="i-qty">${qty}</span>
-                  <span class="i-price">${formatCurrency(total)}</span>
-                </div>
-                ${item.price && item.quantity > 1 ? `<div class="unit-price">${formatCurrency(item.price)} × ${qty}</div>` : ''}
-              `;
-            }).join('')}
-            <div class="divider-solid"></div>
-            <div class="total-section">
-              <div class="total-row">
-                <span>TỔNG CỘNG</span>
-                <span>${formatCurrency(bill?.totalRevenue || 0)}</span>
-              </div>
-            </div>
-            <div class="divider"></div>
-            <div class="footer1">Cảm ơn quý khách! 🙏</div>
-            <div class="footer2">Hẹn gặp lại quý khách lần sau</div>
-            <br/><br/><br/>
-          </div>
-        </body>
-      </html>
-    `;
+    const itemRows = items.map(item => {
+      const qty = typeof item.quantity === 'number' && item.quantity % 1 !== 0
+        ? item.quantity.toFixed(1) : item.quantity;
+      const total = (item.price || 0) * item.quantity;
+      const unitLine = item.price && item.quantity > 1
+        ? `<tr><td colspan="3" class="unit-price">${formatCurrency(item.price)} × ${qty}</td></tr>`
+        : '';
+      return `
+        <tr>
+          <td class="c-name">${item.name || 'Món khác'}</td>
+          <td class="c-qty">${qty}</td>
+          <td class="c-price">${formatCurrency(total)}</td>
+        </tr>
+        ${unitLine}
+      `;
+    }).join('');
+
+    const receiptHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <style>${style}</style>
+</head>
+<body>
+<div class="receipt">
+  <div class="shop-name">${SHOP_NAME}</div>
+  ${SHOP_TAGLINE ? `<div class="tagline">${SHOP_TAGLINE}</div>` : ''}
+  ${SHOP_ADDRESS ? `<div class="info">${SHOP_ADDRESS}</div>` : ''}
+  ${SHOP_PHONE ? `<div class="info">SĐT: ${SHOP_PHONE}</div>` : ''}
+  <hr class="divider-solid"/>
+  <div class="bill-label">${billLabel}</div>
+  <div class="bill-time">${formatTime(bill?.paidAt || bill?.createdAt)}</div>
+  <hr class="divider"/>
+  <table>
+    <thead>
+      <tr>
+        <th class="c-name">Tên món</th>
+        <th class="c-qty">SL</th>
+        <th class="c-price">Tiền</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemRows}
+      <tr class="total-row">
+        <td class="c-name" colspan="2">TỔNG CỘNG</td>
+        <td class="c-price">${formatCurrency(bill?.totalRevenue || 0)}</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr class="divider"/>
+  <div class="footer1">Cảm ơn quý khách! 🙏</div>
+  <div class="footer2">Hẹn gặp lại quý khách lần sau</div>
+  <br/><br/><br/>
+</div>
+</body>
+</html>`;
 
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (!printWindow) {
@@ -148,7 +149,6 @@ const PrintReceipt = ({ bill, items, trigger = 'button', onPrinted }) => {
       printWindow.close();
       if (onPrinted) onPrinted();
     };
-    // Fallback nếu onafterprint không trigger
     setTimeout(() => {
       if (!printWindow.closed) printWindow.close();
       if (onPrinted) onPrinted();

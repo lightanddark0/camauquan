@@ -28,7 +28,7 @@ const Layout = ({ children }) => {
       {/* Mobile header */}
       <header className="bg-white shadow-sm border-b lg:hidden">
         <div className="flex items-center justify-between px-4 py-3">
-          <h1 className="text-lg font-semibold text-gray-900">Quán Ốc</h1>
+          <h1 className="text-lg font-semibold text-gray-900">Cà Mau Quán</h1>
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
@@ -79,7 +79,7 @@ const Layout = ({ children }) => {
           <div className="flex flex-col w-64">
             <div className="flex flex-col flex-grow bg-white border-r border-gray-200">
               <div className="px-6 py-4 border-b">
-                <h1 className="text-xl font-bold text-gray-900">Quán Ốc</h1>
+                <h1 className="text-xl font-bold text-gray-900">Cà Mau Quán</h1>
                 <p className="text-sm text-gray-600">Quản lý đơn hàng</p>
               </div>
               

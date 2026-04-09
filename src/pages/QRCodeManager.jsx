@@ -44,7 +44,7 @@ const QRCodeManager = () => {
       return `
         <div class="qr-page">
           <div class="qr-container">
-            <div class="restaurant-name">QUÁN ỐC</div>
+            <div class="restaurant-name">CÀ MAU QUÁN</div>
             <div class="table-info">
               <div class="table-number">BÀN ${table.number}</div>
               <div class="table-seats">${table.seats} chỗ ngồi</div>
@@ -67,7 +67,7 @@ const QRCodeManager = () => {
     printWindow.document.write(`
       <html>
         <head>
-          <title>Tất cả QR Code - Quán Ốc</title>
+          <title>Tất cả QR Code - Cà Mau Quán</title>
           <style>
             @page {
               margin: 10mm;

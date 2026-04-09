@@ -298,7 +298,7 @@ const PublicBill = () => {
                 </button>
               )}
               <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                Quán Ốc
+                Cà Mau Quán
               </h1>
               <p className="text-gray-600">
                 Hóa đơn bàn {tableNumber}
