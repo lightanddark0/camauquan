@@ -120,12 +120,19 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
     }
   };
 
+  const DECIMAL_CATEGORIES = ['mon_ca', 'hai_san'];
+  const getLegacyStep = (menuItemId) => {
+    const item = menuItems.find(m => m.id === menuItemId);
+    return item && DECIMAL_CATEGORIES.includes(item.category) ? 0.1 : 1;
+  };
+
   const updateLegacyQty = (menuItemId, newQty) => {
-    if (newQty <= 0) {
+    const rounded = parseFloat(Math.max(0, newQty).toFixed(1));
+    if (rounded <= 0) {
       setLegacyItems(prev => prev.filter(li => li.menuItemId !== menuItemId));
     } else {
       setLegacyItems(prev =>
-        prev.map(li => li.menuItemId === menuItemId ? { ...li, quantity: newQty } : li)
+        prev.map(li => li.menuItemId === menuItemId ? { ...li, quantity: rounded } : li)
       );
     }
   };
@@ -485,14 +492,16 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">
                         <button
-                          onClick={() => updateLegacyQty(menuItemId, quantity - 1)}
+                          onClick={() => updateLegacyQty(menuItemId, quantity - getLegacyStep(menuItemId))}
                           className="p-3 hover:bg-gray-200 rounded-full bg-white border"
                         >
                           <Minus size={20} />
                         </button>
-                        <span className="w-16 text-center text-xl font-bold">{quantity}</span>
+                        <span className="w-16 text-center text-xl font-bold">
+                          {DECIMAL_CATEGORIES.includes(menuItem?.category) ? Number(quantity).toFixed(1) : quantity}
+                        </span>
                         <button
-                          onClick={() => updateLegacyQty(menuItemId, quantity + 1)}
+                          onClick={() => updateLegacyQty(menuItemId, quantity + getLegacyStep(menuItemId))}
                           className="p-3 hover:bg-gray-200 rounded-full bg-white border"
                         >
                           <Plus size={20} />
@@ -500,7 +509,7 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
                       </div>
                       <div className="text-right">
                         <div className="text-base text-gray-600">
-                          {formatCurrency(menuItem?.price ?? 0)} x {quantity}
+                          {formatCurrency(menuItem?.price ?? 0)} x {DECIMAL_CATEGORIES.includes(menuItem?.category) ? Number(quantity).toFixed(1) : quantity}
                         </div>
                         <div className="font-bold text-xl text-green-600">
                           {formatCurrency((menuItem?.price ?? 0) * quantity)}

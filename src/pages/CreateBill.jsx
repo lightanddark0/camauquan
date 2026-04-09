@@ -104,9 +104,12 @@ const CreateBill = () => {
   const totalCostWithCustom = billSummary.totalCost + customTotals.totalCost;
   const totalFixedCostWithCustom = billSummary.totalFixedCost + customTotals.totalFixedCost;
 
-  const handleQuantityChange = (menuItemId, change) => {
+  const DECIMAL_CATEGORIES = ['mon_ca', 'hai_san'];
+  const getStep = (category) => DECIMAL_CATEGORIES.includes(category) ? 0.1 : 1;
+
+  const handleQuantityChange = (menuItemId, change, step = 1) => {
     const currentQuantity = quantities[menuItemId] || 0;
-    const newQuantity = Math.max(0, currentQuantity + change);
+    const newQuantity = parseFloat(Math.max(0, currentQuantity + change).toFixed(1));
     if (newQuantity === 0 && voiceAddedIdsRef.current.has(menuItemId)) {
       getVoiceOrderMetrics().recordUserRemovedVoiceItem(menuItemId);
       voiceAddedIdsRef.current.delete(menuItemId);
@@ -123,8 +126,9 @@ const CreateBill = () => {
     });
   };
 
-  const setQuantityDirectly = (menuItemId, value) => {
-    const quantity = Math.max(0, parseInt(value) || 0);
+  const setQuantityDirectly = (menuItemId, value, isDecimal = false) => {
+    const raw = isDecimal ? parseFloat(value) : parseInt(value);
+    const quantity = parseFloat(Math.max(0, raw || 0).toFixed(1));
     if (quantity === 0 && voiceAddedIdsRef.current.has(menuItemId)) {
       getVoiceOrderMetrics().recordUserRemovedVoiceItem(menuItemId);
       voiceAddedIdsRef.current.delete(menuItemId);
@@ -390,6 +394,9 @@ const CreateBill = () => {
         <div className="space-y-4 mb-6">
           {filteredMenuItems.map((item) => {
             const quantity = quantities[item.id] || 0;
+            const step = getStep(item.category);
+            const isDecimal = step < 1;
+            const displayValue = isDecimal ? (quantity > 0 ? quantity.toFixed(1) : '0.0') : quantity;
             
             return (
               <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
@@ -402,7 +409,7 @@ const CreateBill = () => {
                 
                 <div className="flex items-center space-x-3">
                   <button
-                    onClick={() => handleQuantityChange(item.id, -1)}
+                    onClick={() => handleQuantityChange(item.id, -step, step)}
                     className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
                     disabled={quantity === 0}
                   >
@@ -411,14 +418,15 @@ const CreateBill = () => {
                   
                   <input
                     type="number"
-                    value={quantity}
-                    onChange={(e) => setQuantityDirectly(item.id, e.target.value)}
+                    value={displayValue}
+                    onChange={(e) => setQuantityDirectly(item.id, e.target.value, isDecimal)}
                     className="w-16 text-center border rounded-md py-1 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     min="0"
+                    step={step}
                   />
                   
                   <button
-                    onClick={() => handleQuantityChange(item.id, 1)}
+                    onClick={() => handleQuantityChange(item.id, step, step)}
                     className="w-8 h-8 rounded-full bg-indigo-100 hover:bg-indigo-200 flex items-center justify-center transition-colors"
                   >
                     <Plus size={16} />
