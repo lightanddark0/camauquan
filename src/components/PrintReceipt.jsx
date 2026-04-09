@@ -110,7 +110,6 @@ const PrintReceipt = ({ bill, items, trigger = 'button', onPrinted }) => {
   ${SHOP_PHONE ? `<div class="info">SĐT: ${SHOP_PHONE}</div>` : ''}
   <hr class="divider-solid"/>
   <div class="bill-label">${billLabel}</div>
-  <div class="bill-time">${formatTime(bill?.paidAt || bill?.createdAt)}</div>
   <hr class="divider"/>
   <table>
     <thead>
