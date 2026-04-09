@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useApp } from '../context/AppContext';
-import { X, Plus, Minus, Save, Trash2, ShoppingCart } from 'lucide-react';
+import { X, Plus, Minus, Save, Trash2, ShoppingCart, ChevronDown, UtensilsCrossed } from 'lucide-react';
 import { toast } from 'react-toastify';
 import CustomItemForm from './CustomItemForm';
 
@@ -30,6 +30,7 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
   const [customItems, setCustomItems] = useState([]);
 
   const [selectedCategory, setSelectedCategory] = useState('oc');
+  const [showMenuSection, setShowMenuSection] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -119,14 +120,20 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
     return item && DECIMAL_CATEGORIES.includes(item.category) ? 0.1 : 1;
   };
 
-  const updateLegacyQty = (menuItemId, newQty) => {
+  const updateLegacyQty = (menuItemId, newQty, menuItemRef) => {
     const rounded = parseFloat(Math.max(0, newQty).toFixed(1));
     if (rounded <= 0) {
       setLegacyItems(prev => prev.filter(li => li.menuItemId !== menuItemId));
     } else {
-      setLegacyItems(prev =>
-        prev.map(li => li.menuItemId === menuItemId ? { ...li, quantity: rounded } : li)
-      );
+      setLegacyItems(prev => {
+        const exists = prev.find(li => li.menuItemId === menuItemId);
+        if (exists) {
+          return prev.map(li => li.menuItemId === menuItemId ? { ...li, quantity: rounded } : li);
+        }
+        // Item chưa có trong legacyItems → thêm mới
+        const m = menuItemRef ?? menuItems.find(mi => mi.id === menuItemId);
+        return [...prev, { menuItemId, name: m?.name ?? menuItemId, quantity: rounded, menuItem: m ?? null }];
+      });
     }
   };
 
@@ -342,7 +349,22 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
 
           {/* Menu Section */}
           <div className="mb-8">
-            <h3 className="text-base sm:text-lg font-semibold mb-4">Thực đơn</h3>
+            <button
+              onClick={() => setShowMenuSection(prev => !prev)}
+              className="w-full flex items-center justify-between p-3 rounded-lg border border-dashed border-indigo-300 hover:bg-indigo-50 transition-colors group"
+            >
+              <span className="flex items-center gap-2 text-indigo-700 font-semibold text-base">
+                <UtensilsCrossed size={18} />
+                Thêm / Sửa món từ thực đơn
+              </span>
+              <ChevronDown
+                size={18}
+                className={`text-indigo-500 transition-transform duration-200 ${showMenuSection ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            {showMenuSection && (
+            <div className="mt-4">
 
             {/* Category Tabs */}
             <div className="border-b border-gray-200 mb-6">
@@ -398,7 +420,7 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
                       </div>
                       <div className="flex items-center space-x-3">
                         <button
-                          onClick={() => updateLegacyQty(m.id, qty - step)}
+                          onClick={() => updateLegacyQty(m.id, qty - step, m)}
                           disabled={qty === 0}
                           className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
                         >
@@ -411,12 +433,12 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
                           min="0"
                           onChange={(e) => {
                             const raw = isDecimal ? parseFloat(e.target.value) : parseInt(e.target.value);
-                            updateLegacyQty(m.id, parseFloat(Math.max(0, raw || 0).toFixed(1)));
+                            updateLegacyQty(m.id, parseFloat(Math.max(0, raw || 0).toFixed(1)), m);
                           }}
                           className="w-16 text-center border rounded-md py-1 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                         />
                         <button
-                          onClick={() => updateLegacyQty(m.id, qty + step)}
+                          onClick={() => updateLegacyQty(m.id, qty + step, m)}
                           className="w-8 h-8 rounded-full bg-indigo-100 hover:bg-indigo-200 flex items-center justify-center transition-colors"
                         >
                           <Plus size={16} />
@@ -431,6 +453,9 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
             <div className="mt-6">
               <CustomItemForm onAdd={handleAddCustomItem} />
             </div>
+
+            </div>
+            )}
           </div>
 
           {/* Order Summary */}
