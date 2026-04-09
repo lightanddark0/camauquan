@@ -65,40 +65,33 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
     setCustomItems(newCustom);
   }, [bill, menuItems]);
 
-  // --- Group orderItems theo category rồi parentMenuItemId ---
-  const grouped = useMemo(() => {
-    const filtered = allOrderItems.filter(oi => oi.category === selectedCategory);
-    const standalone = [];
-    const byParent = {}; // { [parentMenuItemId]: { parentName, parentId, items[] } }
-
-    filtered.forEach(oi => {
-      if (!oi.parentMenuItemId) {
-        standalone.push(oi);
-      } else {
-        if (!byParent[oi.parentMenuItemId]) {
-          const parent = menuItems.find(m => m.id === oi.parentMenuItemId);
-          byParent[oi.parentMenuItemId] = {
-            parentId: oi.parentMenuItemId,
-            parentName: parent?.name ?? oi.parentMenuItemId,
-            items: [],
-          };
-        }
-        byParent[oi.parentMenuItemId].items.push(oi);
-      }
-    });
-
-    return { standalone, groups: Object.values(byParent) };
-  }, [allOrderItems, menuItems, selectedCategory]);
+  // --- Group menuItems theo category (thay cho orderItems) ---
+  const filteredMenuItems = useMemo(() => {
+    return menuItems.filter(m => m.category === selectedCategory);
+  }, [menuItems, selectedCategory]);
 
   // --- Badge count cho category tab ---
   const getCategoryCount = (catId) => {
-    const fromCart = allOrderItems.filter(
-      oi => oi.category === catId && (cart[oi.id]?.qty ?? 0) > 0
-    ).length;
     const fromLegacy = legacyItems.filter(
       li => li.menuItem?.category === catId && li.quantity > 0
     ).length;
-    return fromCart + fromLegacy;
+    return fromLegacy;
+  };
+
+  // --- Thêm menuItem vào legacyItems ---
+  const addMenuItem = (m) => {
+    const step = DECIMAL_CATEGORIES.includes(m.category) ? 0.1 : 1;
+    setLegacyItems(prev => {
+      const existing = prev.find(li => li.menuItemId === m.id);
+      if (existing) {
+        return prev.map(li =>
+          li.menuItemId === m.id
+            ? { ...li, quantity: parseFloat((li.quantity + step).toFixed(1)) }
+            : li
+        );
+      }
+      return [...prev, { menuItemId: m.id, name: m.name, quantity: step, menuItem: m }];
+    });
   };
 
   // --- Cart handlers ---
@@ -352,56 +345,86 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
             <h3 className="text-base sm:text-lg font-semibold mb-4">Thực đơn</h3>
 
             {/* Category Tabs */}
-            <div className="flex overflow-x-auto space-x-2 mb-6 pb-2">
-              {CATEGORIES.map(cat => {
-                const count = getCategoryCount(cat.id);
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => setSelectedCategory(cat.id)}
-                    className={`flex-shrink-0 px-3 py-2 rounded-full text-xs sm:text-sm font-medium relative ${
-                      selectedCategory === cat.id
-                        ? 'bg-indigo-100 text-indigo-700'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    <span className="mr-1">{cat.emoji}</span>
-                    {cat.name}
-                    {count > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
-                        {count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+            <div className="border-b border-gray-200 mb-6">
+              <nav className="-mb-px flex space-x-8 overflow-x-auto">
+                {CATEGORIES.map(cat => {
+                  const count = getCategoryCount(cat.id);
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedCategory(cat.id)}
+                      className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                        selectedCategory === cat.id
+                          ? 'border-indigo-500 text-indigo-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <span>{cat.emoji}</span>
+                      <span>{cat.name}</span>
+                      {count > 0 && (
+                        <span className={`inline-flex items-center justify-center w-5 h-5 text-xs rounded-full ${
+                          selectedCategory === cat.id
+                            ? 'bg-indigo-100 text-indigo-600'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
             </div>
 
-            {/* OrderItem Grid — grouped by parentMenuItemId */}
-            {grouped.standalone.length === 0 && grouped.groups.length === 0 ? (
+            {/* MenuItem List */}
+            {filteredMenuItems.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-base font-medium text-gray-900">Không có món ăn nào</p>
                 <p className="text-sm text-gray-600">Danh mục này chưa có món ăn nào</p>
               </div>
             ) : (
-              <div className="space-y-5">
-                {/* Standalone orderItems (không có parent) */}
-                {grouped.standalone.length > 0 && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {grouped.standalone.map(oi => renderOrderItemCard(oi))}
-                  </div>
-                )}
-                {/* Grouped: parent label + children */}
-                {grouped.groups.map(({ parentId, parentName, items }) => (
-                  <div key={parentId}>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                      {parentName}
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {items.map(oi => renderOrderItemCard(oi))}
+              <div className="space-y-2">
+                {filteredMenuItems.map(m => {
+                  const legacyItem = legacyItems.find(li => li.menuItemId === m.id);
+                  const qty = legacyItem?.quantity ?? 0;
+                  const step = DECIMAL_CATEGORIES.includes(m.category) ? 0.1 : 1;
+                  const isDecimal = step < 1;
+                  const displayValue = isDecimal ? Number(qty).toFixed(1) : qty;
+                  return (
+                    <div key={m.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900">{m.name}</h3>
+                        {m.price > 0 && <p className="text-indigo-600 font-medium">{formatCurrency(m.price)}</p>}
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <button
+                          onClick={() => updateLegacyQty(m.id, qty - step)}
+                          disabled={qty === 0}
+                          className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+                        >
+                          <Minus size={16} />
+                        </button>
+                        <input
+                          type="number"
+                          value={displayValue}
+                          step={step}
+                          min="0"
+                          onChange={(e) => {
+                            const raw = isDecimal ? parseFloat(e.target.value) : parseInt(e.target.value);
+                            updateLegacyQty(m.id, parseFloat(Math.max(0, raw || 0).toFixed(1)));
+                          }}
+                          className="w-16 text-center border rounded-md py-1 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        />
+                        <button
+                          onClick={() => updateLegacyQty(m.id, qty + step)}
+                          className="w-8 h-8 rounded-full bg-indigo-100 hover:bg-indigo-200 flex items-center justify-center transition-colors"
+                        >
+                          <Plus size={16} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
