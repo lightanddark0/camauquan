@@ -130,7 +130,12 @@ const PrintReceipt = ({ bill, items, trigger = 'button', onPrinted }) => {
   </table>
   <hr class="divider"/>
   <div class="footer1">Cảm ơn quý khách! 🙏</div>
-  <div class="footer2">Hẹn gặp lại quý khách lần sau</div>
+  <div class="footer2">Hẹn gặp lại quý khách lần sau
+  </br>
+  </br>
+  </br>
+  </br>
+  </div>
   <div style="height:40mm;"></div>
 </div>
 </body>
