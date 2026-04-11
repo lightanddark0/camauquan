@@ -1,10 +1,12 @@
 import React, { useRef, useEffect } from 'react';
 import { Printer } from 'lucide-react';
 
-const SHOP_NAME = 'CÀ MAU QUÁN';
+const SHOP_NAME = 'Cà Mau Quán';
 const SHOP_TAGLINE = '~ Đặc sản biển Cà Mau ~';
-const SHOP_ADDRESS = '';
-const SHOP_PHONE = '';
+const SHOP_ADDRESS = '130 đường 9A, Long Bình, Hồ Chí Minh';
+const SHOP_PHONE = '0902434074';
+const SHOP_WIFI_NAME = 'Xin Cam On';
+const SHOP_WIFI_PASS = '79797979';
 
 const formatCurrency = (amount) =>
   new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
@@ -30,71 +32,115 @@ const PrintReceipt = ({ bill, items, trigger = 'button', onPrinted }) => {
     : `Bàn ${bill.tableNumber}`;
 
   const handlePrint = () => {
+    const printTime = new Date().toLocaleString('vi-VN', {
+      hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit',
+    });
+    const openTime = bill?.createdAt ? formatTime(bill.createdAt) : printTime;
+    const tableLabel = bill?.isTakeaway
+      ? `Mang về #${bill.takeawayNumber}`
+      : `Bàn ${bill.tableNumber}`;
+
     const style = `
-      @page { size: 80mm auto; margin: 0; }
+      @page { size: 80mm auto; margin: 0 0 25mm 0; }
       * { box-sizing: border-box; }
       body {
         margin: 0; padding: 0;
-        font-family: 'Courier New', Courier, monospace;
-        font-size: 15px;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 13px;
         color: #000;
-        line-height: 1.5;
+        line-height: 1.4;
       }
-      .receipt { width: 76mm; padding: 4mm 3mm 10mm; }
+      .receipt {
+        width: 76mm;
+        padding: 3mm 3mm 8mm;
+        page-break-after: always;
+        break-after: page;
+      }
       .shop-name {
-        font-size: 20px;
-        font-weight: bold;
+        font-size: 18px;
+        font-weight: 900;
         text-align: center;
+        letter-spacing: 0.5px;
+        margin-bottom: 2px;
+        text-transform: uppercase;
+      }
+      .tagline { font-size: 12px; text-align: center; margin-bottom: 1px; }
+      .info { font-size: 12px; text-align: center; margin-bottom: 1px; }
+      .receipt-title {
+        font-size: 16px;
+        font-weight: 900;
+        text-align: center;
+        margin: 5px 0 3px;
+        text-transform: uppercase;
         letter-spacing: 1px;
-        margin-bottom: 1px;
       }
-      .tagline { font-size: 13px; text-align: center; margin-bottom: 2px; }
-      .info { font-size: 13px; text-align: center; }
-      .bill-label { font-size: 16px; font-weight: bold; text-align: center; margin: 3px 0 1px; }
-      .bill-time { font-size: 13px; text-align: center; margin-bottom: 2px; }
       .divider-solid { border: none; border-top: 2px solid #000; margin: 4px 0; }
-      .divider { border: none; border-top: 1px dashed #000; margin: 4px 0; }
-      table { width: 100%; border-collapse: collapse; }
+      .divider-dot   { border: none; border-top: 1px dotted #000; margin: 3px 0; }
+      .meta-row { display: flex; justify-content: space-between; font-size: 12px; margin: 1px 0; }
+      table { width: 100%; border-collapse: collapse; margin-top: 2px; }
+      thead tr { border-top: 1px solid #000; border-bottom: 1px solid #000; }
       thead th {
-        font-size: 14px;
-        font-weight: bold;
+        font-size: 12px;
+        font-weight: 700;
         padding: 3px 2px;
-        border-bottom: 1px solid #000;
       }
-      thead th.c-name { text-align: left; }
-      thead th.c-qty  { text-align: right; width: 24px; }
-      thead th.c-price{ text-align: right; width: 72px; }
-      tbody td { font-size: 15px; padding: 3px 2px 1px; vertical-align: top; }
-      tbody td.c-name { text-align: left; word-break: break-word; }
-      tbody td.c-qty  { text-align: right; width: 24px; }
-      tbody td.c-price{ text-align: right; width: 72px; white-space: nowrap; }
-      .unit-price { font-size: 12px; color: #444; text-align: right; padding: 0 2px 3px; }
-      .total-row td {
-        font-size: 17px;
-        font-weight: bold;
-        padding: 4px 2px;
-        border-top: 2px solid #000;
+      thead th.c-name  { text-align: left; }
+      thead th.c-price { text-align: right; width: 52px; }
+      thead th.c-qty   { text-align: center; width: 28px; }
+      thead th.c-total { text-align: right; width: 56px; }
+      tbody td {
+        font-size: 13px;
+        font-weight: 600;
+        padding: 3px 2px 2px;
+        vertical-align: top;
       }
-      .footer1 { font-size: 15px; font-weight: bold; text-align: center; margin-top: 8px; }
-      .footer2 { font-size: 13px; text-align: center; margin-top: 2px; }
+      tbody td.c-name  { text-align: left; word-break: break-word; }
+      tbody td.c-price { text-align: right; width: 52px; white-space: nowrap; font-weight: 400; font-size: 12px; }
+      tbody td.c-qty   { text-align: center; width: 28px; }
+      tbody td.c-total { text-align: right; width: 56px; white-space: nowrap; }
+      .subtotal-row {
+        display: flex; justify-content: space-between;
+        font-size: 13px; font-weight: 600;
+        padding: 3px 2px;
+      }
+      .grand-total-label {
+        font-size: 18px; font-weight: 900;
+        text-transform: uppercase;
+      }
+      .grand-total-value {
+        font-size: 18px; font-weight: 900;
+      }
+      .grand-total-row {
+        display: flex; justify-content: space-between;
+        align-items: baseline;
+        padding: 4px 2px 2px;
+      }
+      .payment-row {
+        display: flex; justify-content: space-between;
+        font-size: 13px; padding: 1px 2px 3px;
+      }
+      .footer-bold {
+        font-size: 13px; font-weight: 700;
+        text-align: center; margin-top: 6px;
+      }
+      .footer-center { font-size: 12px; text-align: center; margin-top: 1px; }
     `;
 
-    const itemRows = items.map(item => {
+    const itemRows = items.map((item, idx) => {
       const qty = typeof item.quantity === 'number' && item.quantity % 1 !== 0
         ? item.quantity.toFixed(1) : item.quantity;
       const total = (item.price || 0) * item.quantity;
-      const unitLine = item.price && item.quantity > 1
-        ? `<tr><td colspan="3" class="unit-price">${formatCurrency(item.price)} × ${qty}</td></tr>`
-        : '';
       return `
         <tr>
-          <td class="c-name">${item.name || 'Món khác'}</td>
+          <td class="c-name">${idx + 1}. ${item.name || 'Món khác'}</td>
+          <td class="c-price">${item.price ? new Intl.NumberFormat('vi-VN').format(item.price) : '-'}</td>
           <td class="c-qty">${qty}</td>
-          <td class="c-price">${formatCurrency(total)}</td>
+          <td class="c-total">${new Intl.NumberFormat('vi-VN').format(total)}</td>
         </tr>
-        ${unitLine}
       `;
     }).join('');
+
+    const totalItems = items.reduce((s, it) => s + (it.quantity || 0), 0);
 
     const receiptHtml = `<!DOCTYPE html>
 <html>
@@ -107,35 +153,46 @@ const PrintReceipt = ({ bill, items, trigger = 'button', onPrinted }) => {
   <div class="shop-name">${SHOP_NAME}</div>
   ${SHOP_TAGLINE ? `<div class="tagline">${SHOP_TAGLINE}</div>` : ''}
   ${SHOP_ADDRESS ? `<div class="info">${SHOP_ADDRESS}</div>` : ''}
-  ${SHOP_PHONE ? `<div class="info">SĐT: ${SHOP_PHONE}</div>` : ''}
+  ${SHOP_PHONE ? `<div class="info">Điện thoại ${SHOP_PHONE}</div>` : ''}
+  <div class="receipt-title">Hóa Đơn Thanh Toán</div>
   <hr class="divider-solid"/>
-  <div class="bill-label">${billLabel}</div>
-  <hr class="divider"/>
+  <div class="meta-row">
+    <span>Tại bàn</span>
+    <span><b>${tableLabel}</b></span>
+  </div>
+  <div class="meta-row">
+    <span>Giờ vào: ${openTime}</span>
+    <span>Giờ in: ${printTime}</span>
+  </div>
   <table>
     <thead>
       <tr>
-        <th class="c-name">Tên món</th>
-        <th class="c-qty">SL</th>
-        <th class="c-price">Tiền</th>
+        <th class="c-name">Mặt hàng</th>
+        <th class="c-price">Đ.Giá</th>
+        <th class="c-qty">SL/TL</th>
+        <th class="c-total">T.Tiền</th>
       </tr>
     </thead>
-    <tbody>
-      ${itemRows}
-      <tr class="total-row">
-        <td class="c-name" colspan="2">TỔNG CỘNG</td>
-        <td class="c-price">${formatCurrency(bill?.totalRevenue || 0)}</td>
-      </tr>
-    </tbody>
+    <tbody>${itemRows}</tbody>
   </table>
-  <hr class="divider"/>
-  <div class="footer1">Cảm ơn quý khách! 🙏</div>
-  <div class="footer2">Hẹn gặp lại quý khách lần sau
-  </br>
-  </br>
-  </br>
-  </br>
+  <hr class="divider-dot"/>
+  <div class="subtotal-row">
+    <span>Tiền hàng (${totalItems})</span>
+    <span>${new Intl.NumberFormat('vi-VN').format(bill?.totalRevenue || 0)}</span>
   </div>
-  <div style="height:40mm;"></div>
+  <hr class="divider-solid"/>
+  <div class="grand-total-row">
+    <span class="grand-total-label">Thanh Toán</span>
+    <span class="grand-total-value">${new Intl.NumberFormat('vi-VN').format(bill?.totalRevenue || 0)} đ</span>
+  </div>
+  <div class="payment-row">
+    <span>Tiền mặt</span>
+    <span>${new Intl.NumberFormat('vi-VN').format(bill?.totalRevenue || 0)}</span>
+  </div>
+  <hr class="divider-dot"/>
+  <div class="footer-bold">Cảm ơn quý khách và hẹn gặp lại</div>
+  <div class="footer-center">Wifi: ${SHOP_WIFI_NAME} &nbsp;&nbsp; Pass: ${SHOP_WIFI_PASS}</div>
+  <div style="height:4mm;"></div>
 </div>
 </body>
 </html>`;
