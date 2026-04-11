@@ -9,7 +9,6 @@ hihi.md
 /build
 
 # Local env files
-.env
 .env.local
 .env.development.local
 .env.test.local
@@ -85,4 +84,4 @@ coverage/
 # Vercel
 .vercel
 .env*.local 
-scripts/serviceAccountKey.json
+/scripts/serviceAccountKey.json
