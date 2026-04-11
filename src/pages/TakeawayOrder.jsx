@@ -266,7 +266,7 @@ const TakeawayOrder = () => {
   const handleConfirmOrder = async () => {
     setIsSubmitting(true);
     try {
-      const billItems = summary.items.map(({ orderItemId, quantity }) => ({ orderItemId, quantity }));
+      const billItems = summary.items.map(({ orderItemId, quantity, name }) => ({ orderItemId, quantity, name }));
       const n = await createTakeawayOrder(
         billItems,
         summary.totalRevenue,

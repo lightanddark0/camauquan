@@ -167,9 +167,10 @@ async function handleNewBill(docSnap) {
   for (let i = 0; i < items.length; i++) {
     const item   = items[i];
     const qty    = item.quantity || 1;
-    const name   = item.orderItemId
-      ? await getItemName(item.orderItemId)
-      : (item.customDescription || 'Mon khac');
+    const name   = item.name
+      || (item.orderItemId ? await getItemName(item.orderItemId) : null)
+      || item.customDescription
+      || 'Mon khac';
 
     try {
       const buf = buildKitchenBuffer(tableLabel, orderTime, name, qty);

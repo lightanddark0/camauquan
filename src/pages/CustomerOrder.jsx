@@ -324,7 +324,7 @@ const CustomerOrder = () => {
   const handleConfirmOrder = async () => {
     setIsSubmitting(true);
     try {
-      const billItems = summary.items.map(({ orderItemId, quantity }) => ({ orderItemId, quantity }));
+      const billItems = summary.items.map(({ orderItemId, quantity, name }) => ({ orderItemId, quantity, name }));
       const ok = await testFirestoreConnection();
       if (!ok) throw new Error('Firestore connection failed');
       await submitCustomerOrder(
