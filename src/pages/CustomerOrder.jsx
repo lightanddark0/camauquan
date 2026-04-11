@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 import { Plus, Minus, ChevronDown, ChevronUp, MessageSquare, X, ShoppingCart } from 'lucide-react';
 import { submitCustomerOrder, testFirestoreConnection, getActiveBillForTable } from '../utils/customerOrder';
 import { calculateOrderItemTotals } from '../utils/billCalculations';
+import { printKitchenTickets } from '../utils/kitchenPrint';
 
 // Bỏ "Tất cả" — mỗi category là 1 section cuộn tới
 const CATEGORIES = [
@@ -335,6 +336,13 @@ const CustomerOrder = () => {
         summary.totalCost,
         summary.totalFixedCost
       );
+
+      // In phiếu bếp (non-blocking, không chờ)
+      printKitchenTickets(
+        isTakeawayTable ? 'Mang về' : `Bàn ${tableNumber}`,
+        summary.items
+      );
+
       if (isTakeawayTable && existingBill?.takeawayNumber) {
         navigate(`/order-success/MV-${existingBill.takeawayNumber}`);
       } else {

@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 import { Plus, Minus, ChevronDown, ChevronUp, MessageSquare, X, ShoppingBag } from 'lucide-react';
 import { createTakeawayOrder } from '../utils/customerOrder';
 import { calculateOrderItemTotals } from '../utils/billCalculations';
+import { printKitchenTickets } from '../utils/kitchenPrint';
 
 const CATEGORIES = [
   { value: 'oc', label: 'Ốc' },
@@ -274,6 +275,10 @@ const TakeawayOrder = () => {
         summary.totalCost,
         summary.totalFixedCost
       );
+
+      // In phiếu bếp (non-blocking, không chờ)
+      printKitchenTickets(`Mang về #${n}`, summary.items);
+
       navigate(`/order-success/MV-${n}`);
     } catch (err) {
       console.error(err);

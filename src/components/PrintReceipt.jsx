@@ -8,6 +8,10 @@ const SHOP_PHONE = '0902434074';
 const SHOP_WIFI_NAME = 'Xin Cam On';
 const SHOP_WIFI_PASS = '79797979';
 
+// IP cua PC tai quan chay print-server.py (may in hoa don khach)
+const _receiptIp = import.meta.env.VITE_PRINT_SERVER_IP || '192.168.123.100';
+const RECEIPT_SERVER_URL = `http://${_receiptIp}:3001/print`;
+
 const formatCurrency = (amount) =>
   new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
 
@@ -31,7 +35,7 @@ const PrintReceipt = ({ bill, items, trigger = 'button', onPrinted }) => {
     ? `Mang về #${bill.takeawayNumber}`
     : `Bàn ${bill.tableNumber}`;
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     const printTime = new Date().toLocaleString('vi-VN', {
       hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit',
     });
@@ -39,6 +43,25 @@ const PrintReceipt = ({ bill, items, trigger = 'button', onPrinted }) => {
     const tableLabel = bill?.isTakeaway
       ? `Mang về #${bill.takeawayNumber}`
       : `Bàn ${bill.tableNumber}`;
+
+    // Thử in trực tiếp qua print server (PC tại quán)
+    try {
+      const res = await fetch(RECEIPT_SERVER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(3000),
+        body: JSON.stringify({
+          shopName: SHOP_NAME, tagline: SHOP_TAGLINE,
+          address: SHOP_ADDRESS, phone: SHOP_PHONE,
+          wifiName: SHOP_WIFI_NAME, wifiPass: SHOP_WIFI_PASS,
+          tableLabel, openTime, printTime,
+          items, total: bill?.totalRevenue || 0,
+        }),
+      });
+      if (res.ok) { if (onPrinted) onPrinted(); return; }
+    } catch { /* fallback to browser */ }
+
+    // Fallback: browser print dialog
 
     const style = `
       @page { size: 80mm auto; margin: 0 0 25mm 0; }
