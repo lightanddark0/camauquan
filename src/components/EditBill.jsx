@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useApp } from '../context/AppContext';
@@ -34,6 +34,10 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // Track các item đã có sẵn trong đơn gốc (để phân biệt với món mới thêm)
+  const originalCartIds = useRef(new Set());
+  const originalLegacyIds = useRef(new Set());
+
   // --- Load bill vào state ---
   useEffect(() => {
     if (!bill?.items) return;
@@ -41,9 +45,13 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
     const newLegacy = [];
     const newCustom = [];
 
+    originalCartIds.current = new Set();
+    originalLegacyIds.current = new Set();
+
     bill.items.forEach(item => {
       if (item.orderItemId) {
         newCart[item.orderItemId] = { qty: item.quantity || 1, _orig: item };
+        originalCartIds.current.add(item.orderItemId);
       } else if (item.menuItemId) {
         const menuItem = menuItems.find(m => m.id === item.menuItemId);
         newLegacy.push({
@@ -52,6 +60,7 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
           quantity: item.quantity || 1,
           menuItem: menuItem ?? null,
         });
+        originalLegacyIds.current.add(item.menuItemId);
       } else if (item.customDescription) {
         newCustom.push({
           id: `custom_${Math.random()}`,
@@ -210,14 +219,21 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
     }
     setIsSubmitting(true);
     try {
+      const addedAt = new Date().toISOString();
       const items = [
         // orderItemId items: spread _orig để giữ nguyên kitchenStatus/completedCount/addedAt
         // Chỉ override quantity theo thay đổi của admin
+        // Món mới thêm (không có _orig) → đánh dấu addedAt để kitchen-listener nhận biết và in
         ...Object.entries(cart).map(([id, { qty, _orig }]) =>
-          _orig ? { ..._orig, quantity: qty } : { orderItemId: id, quantity: qty }
+          _orig ? { ..._orig, quantity: qty } : { orderItemId: id, quantity: qty, addedAt }
         ),
         // legacy menuItemId items: giữ nguyên format
-        ...legacyItems.map(({ menuItemId, quantity }) => ({ menuItemId, quantity })),
+        // Món mới thêm (không có trong đơn gốc) → đánh dấu addedAt
+        ...legacyItems.map(({ menuItemId, quantity }) =>
+          originalLegacyIds.current.has(menuItemId)
+            ? { menuItemId, quantity }
+            : { menuItemId, quantity, addedAt }
+        ),
         // custom items
         ...customItems.map(({ customDescription, customAmount }) => ({
           customDescription,

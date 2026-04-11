@@ -19,7 +19,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PRINTER_IP   = '192.168.1.234';
 const PRINTER_PORT = 9100;
 const KEY_FILE     = join(__dirname, 'serviceAccountKey.json');
-const USE_ASCII    = false;   // doi thanh true neu may in in ky tu loi
+const USE_ASCII    = true;    // ASCII khong dau - tranh ky tu loi tren may in nhiet
 
 // ── ESC/POS constants ─────────────────────────────────────────────────────────
 const ESC = 0x1B;
@@ -33,10 +33,34 @@ function log(msg) {
   console.log(`[${t}] ${msg}`);
 }
 
+const VI_MAP = {
+  à:'a',á:'a',ả:'a',ã:'a',ạ:'a',
+  ă:'a',ằ:'a',ắ:'a',ẳ:'a',ẵ:'a',ặ:'a',
+  â:'a',ầ:'a',ấ:'a',ẩ:'a',ẫ:'a',ậ:'a',
+  è:'e',é:'e',ẻ:'e',ẽ:'e',ẹ:'e',
+  ê:'e',ề:'e',ế:'e',ể:'e',ễ:'e',ệ:'e',
+  ì:'i',í:'i',ỉ:'i',ĩ:'i',ị:'i',
+  ò:'o',ó:'o',ỏ:'o',õ:'o',ọ:'o',
+  ô:'o',ồ:'o',ố:'o',ổ:'o',ỗ:'o',ộ:'o',
+  ơ:'o',ờ:'o',ớ:'o',ở:'o',ỡ:'o',ợ:'o',
+  ù:'u',ú:'u',ủ:'u',ũ:'u',ụ:'u',
+  ư:'u',ừ:'u',ứ:'u',ử:'u',ữ:'u',ự:'u',
+  ỳ:'y',ý:'y',ỷ:'y',ỹ:'y',ỵ:'y',đ:'d',
+  À:'A',Á:'A',Ả:'A',Ã:'A',Ạ:'A',
+  Ă:'A',Ằ:'A',Ắ:'A',Ẳ:'A',Ẵ:'A',Ặ:'A',
+  Â:'A',Ầ:'A',Ấ:'A',Ẩ:'A',Ẫ:'A',Ậ:'A',
+  È:'E',É:'E',Ẻ:'E',Ẽ:'E',Ẹ:'E',
+  Ê:'E',Ề:'E',Ế:'E',Ể:'E',Ễ:'E',Ệ:'E',
+  Ì:'I',Í:'I',Ỉ:'I',Ĩ:'I',Ị:'I',
+  Ò:'O',Ó:'O',Ỏ:'O',Õ:'O',Ọ:'O',
+  Ô:'O',Ồ:'O',Ố:'O',Ổ:'O',Ỗ:'O',Ộ:'O',
+  Ơ:'O',Ờ:'O',Ớ:'O',Ở:'O',Ỡ:'O',Ợ:'O',
+  Ù:'U',Ú:'U',Ủ:'U',Ũ:'U',Ụ:'U',
+  Ư:'U',Ừ:'U',Ứ:'U',Ử:'U',Ữ:'U',Ự:'U',
+  Ỳ:'Y',Ý:'Y',Ỷ:'Y',Ỹ:'Y',Ỵ:'Y',Đ:'D',
+};
 function toAscii(str) {
-  return str.normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[đĐ]/g, s => s === 'đ' ? 'd' : 'D');
+  return String(str).split('').map(c => VI_MAP[c] ?? c).join('');
 }
 
 function enc(str) {
@@ -47,7 +71,10 @@ function enc(str) {
 function fmtTime(ts) {
   if (!ts) return new Date().toLocaleString('vi-VN', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' });
   try {
-    const d = ts.toDate ? ts.toDate() : new Date(ts._seconds * 1000);
+    let d;
+    if (ts.toDate) d = ts.toDate();                        // Firestore Timestamp
+    else if (ts._seconds) d = new Date(ts._seconds * 1000); // Firestore Timestamp plain
+    else d = new Date(ts);                                   // ISO string hoac so ms
     return d.toLocaleString('vi-VN', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' });
   } catch { return ''; }
 }
@@ -118,67 +145,91 @@ function sendToPrinter(buf) {
   });
 }
 
-// ── Cache orderItems ──────────────────────────────────────────────────────────
-const itemCache = {};
+// ── Cache ten mon (ca orderItems lan menuItems) ───────────────────────────────
+const nameCache = {};  // id -> ten mon
 let db;
 
-async function getItemName(orderItemId) {
-  if (itemCache[orderItemId]) return itemCache[orderItemId];
-  try {
-    const doc = await db.collection('orderItems').doc(orderItemId).get();
-    if (doc.exists) {
-      itemCache[orderItemId] = doc.data().name || 'Mon khac';
-      return itemCache[orderItemId];
-    }
-  } catch {}
-  return 'Mon khac';
-}
-
-// ── Xu ly don moi ────────────────────────────────────────────────────────────
-const printedBills = new Set();
-
-async function handleNewBill(docSnap) {
-  const billId = docSnap.id;
-  if (printedBills.has(billId)) return;
-
-  const data = docSnap.data();
-  if (!data || data.status !== 'pending') return;
-
-  // Chi in don moi (tao trong 30 giay gan day)
-  if (data.createdAt) {
+async function lookupName(id, collections = ['orderItems', 'menuItems']) {
+  if (!id) return null;
+  if (nameCache[id]) return nameCache[id];
+  for (const col of collections) {
     try {
-      const billedAt = data.createdAt.toDate();
-      const ageSec   = (Date.now() - billedAt.getTime()) / 1000;
-      if (ageSec > 30) { printedBills.add(billId); return; }
+      const snap = await db.collection(col).doc(id).get();
+      if (snap.exists && snap.data().name) {
+        nameCache[id] = snap.data().name;
+        return nameCache[id];
+      }
     } catch {}
   }
+  return null;
+}
 
-  printedBills.add(billId);
+// ── Track items da in (key: billId:orderItemId hoac billId:index) ────────────
+const printedItems = new Set();
 
-  const isTakeaway    = data.isTakeaway || false;
-  const tableLabel    = isTakeaway
+// ── Xu ly thay doi don hang (ca added lan modified) ──────────────────────────
+async function handleBillChange(docSnap, changeType) {
+  const billId = docSnap.id;
+  const data   = docSnap.data();
+  if (!data || data.status !== 'pending') return;
+
+  const isTakeaway = data.isTakeaway || false;
+  const tableLabel = isTakeaway
     ? `Mang ve #${data.takeawayNumber}`
     : `Ban ${data.tableNumber}`;
-  const orderTime     = fmtTime(data.createdAt);
-  const items         = data.items || [];
+  const items = data.items || [];
+  const now   = Date.now();
 
-  log(`Don moi: ${tableLabel} - ${items.length} mon`);
-
+  let printedCount = 0;
   for (let i = 0; i < items.length; i++) {
-    const item   = items[i];
-    const qty    = item.quantity || 1;
-    const name   = item.name
-      || (item.orderItemId ? await getItemName(item.orderItemId) : null)
+    const item    = items[i];
+    const itemKey = `${billId}:${item.orderItemId || i}`;
+
+    if (printedItems.has(itemKey)) continue;
+
+    // Xac dinh thoi gian tao item:
+    // - Don moi (added): dung createdAt cua bill
+    // - Mon them (modified): dung addedAt cua item
+    let ts;
+    if (changeType === 'added') {
+      ts = data.createdAt
+        ? (data.createdAt.toDate ? data.createdAt.toDate().getTime() : new Date(data.createdAt).getTime())
+        : now;
+    } else {
+      ts = item.addedAt ? new Date(item.addedAt).getTime() : 0;
+    }
+
+    const ageSec = (now - ts) / 1000;
+    if (ageSec > 60) {
+      // Mon cu hon 60 giay (co truoc khi listener chay) - bo qua, danh dau da xu ly
+      printedItems.add(itemKey);
+      continue;
+    }
+
+    printedItems.add(itemKey);
+    printedCount++;
+
+    const qty  = item.quantity || 1;
+    const name = item.name                                        // co san trong bill
+      || await lookupName(item.orderItemId)                       // thu orderItems
+      || await lookupName(item.menuItemId)                        // thu menuItems
       || item.customDescription
       || 'Mon khac';
+    const time = changeType === 'added'
+      ? fmtTime(data.createdAt)
+      : fmtTime(item.addedAt);
 
     try {
-      const buf = buildKitchenBuffer(tableLabel, orderTime, name, qty);
+      const buf = buildKitchenBuffer(tableLabel, time, name, qty);
       await sendToPrinter(buf);
-      log(`  [${i+1}] ${name} x${qty} - OK`);
+      log(`  [OK] ${tableLabel} - ${name} x${qty}`);
     } catch (err) {
-      log(`  [${i+1}] ${name} x${qty} - LOI: ${err.message}`);
+      log(`  [LOI] ${tableLabel} - ${name} x${qty}: ${err.message}`);
     }
+  }
+
+  if (printedCount > 0) {
+    log(`Don ${changeType === 'added' ? 'moi' : 'them mon'}: ${tableLabel} - da in ${printedCount} mon`);
   }
 }
 
@@ -212,20 +263,24 @@ Huong dan:
   db = admin.firestore();
   log('Ket noi Firebase thanh cong');
 
-  // Load orderItems cache
-  const snap = await db.collection('orderItems').get();
-  snap.forEach(d => { itemCache[d.id] = d.data().name || 'Mon khac'; });
-  log(`Da tai ${snap.size} mon an vao cache`);
+  // Load cache ten mon tu ca orderItems lan menuItems
+  const [snapOI, snapMI] = await Promise.all([
+    db.collection('orderItems').get(),
+    db.collection('menuItems').get(),
+  ]);
+  snapOI.forEach(d => { if (d.data().name) nameCache[d.id] = d.data().name; });
+  snapMI.forEach(d => { if (d.data().name) nameCache[d.id] = d.data().name; });
+  log(`Da tai ${snapOI.size} orderItems + ${snapMI.size} menuItems vao cache`);
 
   log(`May in bep: ${PRINTER_IP}:${PRINTER_PORT}`);
   log('=' .repeat(50));
   log('Dang lang nghe don hang moi...');
 
-  // Lang nghe Firestore real-time
+  // Lang nghe Firestore real-time (ca don moi lan them mon vao don cu)
   db.collection('bills').onSnapshot(snapshot => {
     snapshot.docChanges().forEach(change => {
-      if (change.type === 'added') {
-        handleNewBill(change.doc).catch(err => log(`Loi xu ly don: ${err.message}`));
+      if (change.type === 'added' || change.type === 'modified') {
+        handleBillChange(change.doc, change.type).catch(err => log(`Loi xu ly don: ${err.message}`));
       }
     });
   }, err => {

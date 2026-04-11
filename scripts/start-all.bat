@@ -13,11 +13,18 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: Kiem tra firebase-admin
-if not exist "%SCRIPT_DIR%..\node_modules\firebase-admin" (
-    echo [*] Cai firebase-admin lan dau...
-    cd "%SCRIPT_DIR%.."
-    npm install firebase-admin --save-dev
+:: Kiem tra firebase-admin (cai trong cung thu muc voi script)
+if not exist "%SCRIPT_DIR%node_modules\firebase-admin" (
+    echo [*] Cai firebase-admin lan dau, vui long doi...
+    cd "%SCRIPT_DIR%"
+    npm install firebase-admin
+    if errorlevel 1 (
+        echo [LOI] Cai firebase-admin that bai!
+        pause
+        exit /b 1
+    )
+    echo [OK] Da cai firebase-admin thanh cong.
+    echo.
 )
 
 :: Kiem tra service account key
@@ -46,4 +53,5 @@ echo  - Hoa don khach: may in 192.168.123.100
 echo  - Phieu bep: may in 192.168.1.234
 echo.
 echo Cac cua so dang chay an tren taskbar.
-timeout /t 5 /nobreak >nul
+echo Nhan phim bat ky de dong cua so nay...
+pause >nul
