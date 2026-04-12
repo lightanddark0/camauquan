@@ -462,7 +462,7 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
                         <input
                           type="number"
                           value={displayValue}
-                          step={step}
+                          step={isDecimal ? 'any' : step}
                           min="0"
                           onChange={(e) => {
                             const raw = isDecimal ? parseFloat(e.target.value) : parseInt(e.target.value);

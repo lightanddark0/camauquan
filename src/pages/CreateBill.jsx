@@ -422,7 +422,7 @@ const CreateBill = () => {
                     onChange={(e) => setQuantityDirectly(item.id, e.target.value, isDecimal)}
                     className="w-16 text-center border rounded-md py-1 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     min="0"
-                    step={step}
+                    step={isDecimal ? 'any' : step}
                   />
                   
                   <button
