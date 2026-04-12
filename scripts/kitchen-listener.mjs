@@ -164,8 +164,18 @@ async function lookupName(id, collections = ['orderItems', 'menuItems']) {
   return null;
 }
 
-// ── Track items da in (key: billId:orderItemId hoac billId:index) ────────────
+// ── Track items da in ────────────────────────────────────────────────────────
+// Key cho mon moi:        "billId:orderItemId"          (in 1 lan)
+// Key cho tang so luong:  "billId:orderItemId:delta:addedAt"  (moi lan tang = key moi)
 const printedItems = new Set();
+
+function buildItemKey(billId, item, index) {
+  const id = item.orderItemId || item.menuItemId || index;
+  if (item.addedQty > 0 && item.addedAt) {
+    return `${billId}:${id}:delta:${item.addedAt}`;
+  }
+  return `${billId}:${id}`;
+}
 
 // ── Xu ly thay doi don hang (ca added lan modified) ──────────────────────────
 async function handleBillChange(docSnap, changeType) {
@@ -183,25 +193,30 @@ async function handleBillChange(docSnap, changeType) {
   let printedCount = 0;
   for (let i = 0; i < items.length; i++) {
     const item    = items[i];
-    const itemKey = `${billId}:${item.orderItemId || i}`;
+
+    // Phan biet 3 truong hop:
+    //   1. Don moi (added)           : tat ca item, dung createdAt
+    //   2. Mon hoan toan moi (modified + addedAt, khong co addedQty)
+    //   3. Tang so luong (modified + addedQty + addedAt): key rieng theo addedAt
+    const isDelta = changeType !== 'added' && item.addedQty > 0 && item.addedAt;
+    const itemKey = buildItemKey(billId, item, i);
 
     if (printedItems.has(itemKey)) continue;
 
-    // Xac dinh thoi gian tao item:
-    // - Don moi (added): dung createdAt cua bill
-    // - Mon them (modified): dung addedAt cua item
+    // Xac dinh thoi gian de kiem tra "mon cu" (truoc khi listener chay)
     let ts;
     if (changeType === 'added') {
       ts = data.createdAt
         ? (data.createdAt.toDate ? data.createdAt.toDate().getTime() : new Date(data.createdAt).getTime())
         : now;
     } else {
+      // ca mon moi lan tang SL deu co addedAt; mon khong doi thi addedAt = undefined -> ts = 0
       ts = item.addedAt ? new Date(item.addedAt).getTime() : 0;
     }
 
     const ageSec = (now - ts) / 1000;
     if (ageSec > 60) {
-      // Mon cu hon 60 giay (co truoc khi listener chay) - bo qua, danh dau da xu ly
+      // Mon cu (co truoc khi listener khoi dong) - bo qua, danh dau da xu ly
       printedItems.add(itemKey);
       continue;
     }
@@ -209,10 +224,13 @@ async function handleBillChange(docSnap, changeType) {
     printedItems.add(itemKey);
     printedCount++;
 
-    const qty  = item.quantity || 1;
-    const name = item.name                                        // co san trong bill
-      || await lookupName(item.orderItemId)                       // thu orderItems
-      || await lookupName(item.menuItemId)                        // thu menuItems
+    // So luong can in:
+    // - Tang SL: chi in phan tang them (addedQty), khong in lai ca mon
+    // - Mon moi / don moi: in toan bo quantity
+    const qty  = isDelta ? item.addedQty : (item.quantity || 1);
+    const name = item.name
+      || await lookupName(item.orderItemId)
+      || await lookupName(item.menuItemId)
       || item.customDescription
       || 'Mon khac';
     const time = changeType === 'added'
@@ -222,7 +240,7 @@ async function handleBillChange(docSnap, changeType) {
     try {
       const buf = buildKitchenBuffer(tableLabel, time, name, qty);
       await sendToPrinter(buf);
-      log(`  [OK] ${tableLabel} - ${name} x${qty}`);
+      log(`  [OK] ${tableLabel} - ${name} x${qty}${isDelta ? ` (them ${qty})` : ''}`);
     } catch (err) {
       log(`  [LOI] ${tableLabel} - ${name} x${qty}: ${err.message}`);
     }

@@ -58,6 +58,7 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
           menuItemId: item.menuItemId,
           name: menuItem?.name ?? item.menuItemId,
           quantity: item.quantity || 1,
+          _origQty: item.quantity || 1,
           menuItem: menuItem ?? null,
         });
         originalLegacyIds.current.add(item.menuItemId);
@@ -221,19 +222,35 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
     try {
       const addedAt = new Date().toISOString();
       const items = [
-        // orderItemId items: spread _orig để giữ nguyên kitchenStatus/completedCount/addedAt
-        // Chỉ override quantity theo thay đổi của admin
-        // Món mới thêm (không có _orig) → đánh dấu addedAt để kitchen-listener nhận biết và in
-        ...Object.entries(cart).map(([id, { qty, _orig }]) =>
-          _orig ? { ..._orig, quantity: qty } : { orderItemId: id, quantity: qty, addedAt }
-        ),
-        // legacy menuItemId items: giữ nguyên format
-        // Món mới thêm (không có trong đơn gốc) → đánh dấu addedAt
-        ...legacyItems.map(({ menuItemId, quantity }) =>
-          originalLegacyIds.current.has(menuItemId)
-            ? { menuItemId, quantity }
-            : { menuItemId, quantity, addedAt }
-        ),
+        // orderItemId items
+        ...Object.entries(cart).map(([id, { qty, _orig }]) => {
+          if (!_orig) {
+            // Món hoàn toàn mới
+            return { orderItemId: id, quantity: qty, addedAt };
+          }
+          const origQty = _orig.quantity || 1;
+          // Strip addedAt/addedQty cũ từ _orig để tránh dữ liệu thừa
+          const { addedQty: _aq, addedAt: _aa, ...cleanOrig } = _orig;
+          if (qty > origQty) {
+            // Tăng số lượng → ghi delta để kitchen-listener in phần tăng thêm
+            return { ...cleanOrig, quantity: qty, addedQty: qty - origQty, addedAt };
+          }
+          // Giữ nguyên hoặc giảm → không in thêm
+          return { ...cleanOrig, quantity: qty };
+        }),
+        // legacy menuItemId items
+        ...legacyItems.map(({ menuItemId, quantity, _origQty }) => {
+          if (!originalLegacyIds.current.has(menuItemId)) {
+            // Món hoàn toàn mới
+            return { menuItemId, quantity, addedAt };
+          }
+          if (_origQty != null && quantity > _origQty) {
+            // Tăng số lượng → ghi delta
+            return { menuItemId, quantity, addedQty: quantity - _origQty, addedAt };
+          }
+          // Giữ nguyên hoặc giảm
+          return { menuItemId, quantity };
+        }),
         // custom items
         ...customItems.map(({ customDescription, customAmount }) => ({
           customDescription,
