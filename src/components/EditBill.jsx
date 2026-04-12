@@ -91,13 +91,13 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
 
   // --- Thêm menuItem vào legacyItems ---
   const addMenuItem = (m) => {
-    const step = DECIMAL_CATEGORIES.includes(m.category) ? 0.1 : 1;
+    const step = DECIMAL_CATEGORIES.includes(m.category) ? 1 : 1;
     setLegacyItems(prev => {
       const existing = prev.find(li => li.menuItemId === m.id);
       if (existing) {
         return prev.map(li =>
           li.menuItemId === m.id
-            ? { ...li, quantity: parseFloat((li.quantity + step).toFixed(1)) }
+            ? { ...li, quantity: parseFloat((li.quantity + step).toFixed(2)) }
             : li
         );
       }
@@ -127,11 +127,11 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
   const DECIMAL_CATEGORIES = ['mon_ca', 'hai_san'];
   const getLegacyStep = (menuItemId) => {
     const item = menuItems.find(m => m.id === menuItemId);
-    return item && DECIMAL_CATEGORIES.includes(item.category) ? 0.1 : 1;
+    return item && DECIMAL_CATEGORIES.includes(item.category) ? 1 : 1;
   };
 
   const updateLegacyQty = (menuItemId, newQty, menuItemRef) => {
-    const rounded = parseFloat(Math.max(0, newQty).toFixed(1));
+    const rounded = parseFloat(Math.max(0, newQty).toFixed(2));
     if (rounded <= 0) {
       setLegacyItems(prev => prev.filter(li => li.menuItemId !== menuItemId));
     } else {
@@ -442,9 +442,9 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
                 {filteredMenuItems.map(m => {
                   const legacyItem = legacyItems.find(li => li.menuItemId === m.id);
                   const qty = legacyItem?.quantity ?? 0;
-                  const step = DECIMAL_CATEGORIES.includes(m.category) ? 0.1 : 1;
-                  const isDecimal = step < 1;
-                  const displayValue = isDecimal ? Number(qty).toFixed(1) : qty;
+                  const step = DECIMAL_CATEGORIES.includes(m.category) ? 1 : 1;
+                  const isDecimal = DECIMAL_CATEGORIES.includes(m.category);
+                  const displayValue = isDecimal ? Number(qty).toFixed(2) : qty;
                   return (
                     <div key={m.id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex-1">
@@ -466,7 +466,7 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
                           min="0"
                           onChange={(e) => {
                             const raw = isDecimal ? parseFloat(e.target.value) : parseInt(e.target.value);
-                            updateLegacyQty(m.id, parseFloat(Math.max(0, raw || 0).toFixed(1)), m);
+                            updateLegacyQty(m.id, parseFloat(Math.max(0, raw || 0).toFixed(2)), m);
                           }}
                           className="w-16 text-center border rounded-md py-1 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                         />
@@ -579,7 +579,7 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
                           <Minus size={20} />
                         </button>
                         <span className="w-16 text-center text-xl font-bold">
-                          {DECIMAL_CATEGORIES.includes(menuItem?.category) ? Number(quantity).toFixed(1) : quantity}
+                          {DECIMAL_CATEGORIES.includes(menuItem?.category) ? Number(quantity).toFixed(2) : quantity}
                         </span>
                         <button
                           onClick={() => updateLegacyQty(menuItemId, quantity + getLegacyStep(menuItemId))}
@@ -590,7 +590,7 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
                       </div>
                       <div className="text-right">
                         <div className="text-base text-gray-600">
-                          {formatCurrency(menuItem?.price ?? 0)} x {DECIMAL_CATEGORIES.includes(menuItem?.category) ? Number(quantity).toFixed(1) : quantity}
+                          {formatCurrency(menuItem?.price ?? 0)} x {DECIMAL_CATEGORIES.includes(menuItem?.category) ? Number(quantity).toFixed(2) : quantity}
                         </div>
                         <div className="font-bold text-xl text-green-600">
                           {formatCurrency((menuItem?.price ?? 0) * quantity)}

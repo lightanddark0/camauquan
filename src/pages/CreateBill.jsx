@@ -105,11 +105,11 @@ const CreateBill = () => {
   const totalFixedCostWithCustom = billSummary.totalFixedCost + customTotals.totalFixedCost;
 
   const DECIMAL_CATEGORIES = ['mon_ca', 'hai_san'];
-  const getStep = (category) => DECIMAL_CATEGORIES.includes(category) ? 0.1 : 1;
+  const getStep = (category) => DECIMAL_CATEGORIES.includes(category) ? 1 : 1;
 
   const handleQuantityChange = (menuItemId, change, step = 1) => {
     const currentQuantity = quantities[menuItemId] || 0;
-    const newQuantity = parseFloat(Math.max(0, currentQuantity + change).toFixed(1));
+    const newQuantity = parseFloat(Math.max(0, currentQuantity + change).toFixed(2));
     if (newQuantity === 0 && voiceAddedIdsRef.current.has(menuItemId)) {
       getVoiceOrderMetrics().recordUserRemovedVoiceItem(menuItemId);
       voiceAddedIdsRef.current.delete(menuItemId);
@@ -128,7 +128,7 @@ const CreateBill = () => {
 
   const setQuantityDirectly = (menuItemId, value, isDecimal = false) => {
     const raw = isDecimal ? parseFloat(value) : parseInt(value);
-    const quantity = parseFloat(Math.max(0, raw || 0).toFixed(1));
+    const quantity = parseFloat(Math.max(0, raw || 0).toFixed(2));
     if (quantity === 0 && voiceAddedIdsRef.current.has(menuItemId)) {
       getVoiceOrderMetrics().recordUserRemovedVoiceItem(menuItemId);
       voiceAddedIdsRef.current.delete(menuItemId);
@@ -396,7 +396,7 @@ const CreateBill = () => {
             const quantity = quantities[item.id] || 0;
             const step = getStep(item.category);
             const isDecimal = step < 1;
-            const displayValue = isDecimal ? (quantity > 0 ? quantity.toFixed(1) : '0.0') : quantity;
+            const displayValue = isDecimal ? (quantity > 0 ? quantity.toFixed(2) : '0.00') : quantity;
             
             return (
               <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">

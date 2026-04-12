@@ -155,7 +155,7 @@ const PrintReceipt = ({ bill, items, trigger = 'button', onPrinted }) => {
 
     const itemRows = items.map((item, idx) => {
       const qty = typeof item.quantity === 'number' && item.quantity % 1 !== 0
-        ? item.quantity.toFixed(1) : item.quantity;
+        ? item.quantity.toFixed(2) : item.quantity;
       const total = (item.price || 0) * item.quantity;
       return `
         <tr>
