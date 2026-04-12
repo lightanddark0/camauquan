@@ -45,6 +45,9 @@ const PrintReceipt = ({ bill, items, trigger = 'button', onPrinted }) => {
       : `Bàn ${bill.tableNumber}`;
 
     // Thử in trực tiếp qua print server (PC tại quán)
+    const discountPercent = bill?.discountPercent || 0;
+    const discountAmount  = bill?.discountAmount  || 0;
+    const finalTotal      = bill?.finalTotal      ?? bill?.totalRevenue ?? 0;
     try {
       const res = await fetch(RECEIPT_SERVER_URL, {
         method: 'POST',
@@ -56,6 +59,7 @@ const PrintReceipt = ({ bill, items, trigger = 'button', onPrinted }) => {
           wifiName: SHOP_WIFI_NAME, wifiPass: SHOP_WIFI_PASS,
           tableLabel, openTime, printTime,
           items, total: bill?.totalRevenue || 0,
+          discountPercent, discountAmount, finalTotal,
         }),
       });
       if (res.ok) { if (onPrinted) onPrinted(); return; }
@@ -203,14 +207,19 @@ const PrintReceipt = ({ bill, items, trigger = 'button', onPrinted }) => {
     <span>Tiền hàng (${totalItems})</span>
     <span>${new Intl.NumberFormat('vi-VN').format(bill?.totalRevenue || 0)}</span>
   </div>
+  ${discountAmount > 0 ? `
+  <div class="subtotal-row" style="color:#c00">
+    <span>Giảm giá ${discountPercent}%</span>
+    <span>- ${new Intl.NumberFormat('vi-VN').format(discountAmount)}</span>
+  </div>` : ''}
   <hr class="divider-solid"/>
   <div class="grand-total-row">
     <span class="grand-total-label">Thanh Toán</span>
-    <span class="grand-total-value">${new Intl.NumberFormat('vi-VN').format(bill?.totalRevenue || 0)} đ</span>
+    <span class="grand-total-value">${new Intl.NumberFormat('vi-VN').format(finalTotal)} đ</span>
   </div>
   <div class="payment-row">
     <span>Tiền mặt</span>
-    <span>${new Intl.NumberFormat('vi-VN').format(bill?.totalRevenue || 0)}</span>
+    <span>${new Intl.NumberFormat('vi-VN').format(finalTotal)}</span>
   </div>
   <hr class="divider-dot"/>
   <div class="footer-bold">Cảm ơn quý khách và hẹn gặp lại</div>

@@ -85,7 +85,9 @@ function buildBuffer({
   wifiName, wifiPass,
   tableLabel, openTime, printTime,
   items, total,
+  discountPercent = 0, discountAmount = 0, finalTotal,
 }) {
+  const payTotal = (discountAmount > 0 && finalTotal != null) ? finalTotal : total;
   const b = [];
   const add  = (...bytes) => b.push(...bytes);
   const str  = s => b.push(...encode(s));
@@ -150,16 +152,20 @@ function buildBuffer({
   const totalItems = items.reduce((s, it) => s + (it.quantity || 0), 0);
   line(padRow(`Tiền hàng (${totalItems})`, fmtNum(total)));
 
+  if (discountAmount > 0) {
+    line(padRow(`Giam gia ${discountPercent}%`, '- ' + fmtNum(discountAmount)));
+  }
+
   div('=');
 
   // Tổng tiền – chữ to
   add(GS,  0x21, 0x11);
   add(ESC, 0x45, 0x01);
-  line(padRow('THANH TOÁN', fmtNum(total) + 'đ'));
+  line(padRow('THANH TOÁN', fmtNum(payTotal) + 'đ'));
   add(GS,  0x21, 0x00);
   add(ESC, 0x45, 0x00);
 
-  line(padRow('Tiền mặt', fmtNum(total)));
+  line(padRow('Tiền mặt', fmtNum(payTotal)));
   div();
 
   // ── Footer ──

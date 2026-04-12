@@ -9,6 +9,7 @@ import { getBillCostTotalsForReport } from '../utils/billCostTotals';
 import EditBill from '../components/EditBill';
 import KitchenManagement from '../components/KitchenManagement';
 import PrintReceipt from '../components/PrintReceipt';
+import DiscountModal from '../components/DiscountModal';
 
 const BillManagement = () => {
   const { menuItems, orderItems, tables } = useApp();
@@ -23,6 +24,7 @@ const BillManagement = () => {
   const [showKitchenModal, setShowKitchenModal] = useState(false);
   const [changingTableBill, setChangingTableBill] = useState(null);
   const [printBill, setPrintBill] = useState(null); // bill to print
+  const [discountBill, setDiscountBill] = useState(null); // bill đang chờ nhập giảm giá
 
   useEffect(() => {
     const q = query(
@@ -186,6 +188,31 @@ const BillManagement = () => {
         draggable: false,
       }
     );
+  };
+
+  const handleConfirmPayment = async (bill, { discountPercent, discountAmount, finalTotal }) => {
+    setDiscountBill(null);
+    setProcessingPayment(bill.id);
+    try {
+      const updateData = {
+        status: 'paid',
+        paidAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      if (discountAmount > 0) {
+        updateData.discountPercent = discountPercent;
+        updateData.discountAmount = discountAmount;
+        updateData.finalTotal = finalTotal;
+      }
+      await updateDoc(doc(db, 'bills', bill.id), updateData);
+      toast.success('Đã thanh toán', { position: 'top-right', autoClose: 2000 });
+      setPrintBill({ ...bill, status: 'paid', paidAt: new Date(), ...updateData });
+    } catch (error) {
+      console.error('Error marking bill as paid:', error);
+      toast.error('Có lỗi xảy ra khi cập nhật trạng thái thanh toán', { position: 'top-right', autoClose: 3000 });
+    } finally {
+      setProcessingPayment(null);
+    }
   };
 
   const handleUndoPayment = (bill) => {
@@ -551,7 +578,7 @@ const BillManagement = () => {
                     <div className="flex items-center gap-2">
                       {bill.status === 'pending' && (
                         <button
-                          onClick={() => handleMarkAsPaid(bill)}
+                          onClick={() => setDiscountBill(bill)}
                           disabled={processingPayment === bill.id}
                           className="flex items-center gap-1 px-3 py-2 text-sm text-green-600 hover:text-green-800 hover:bg-green-50 rounded-md border border-green-200 disabled:opacity-50 transition-colors"
                           title="Đánh dấu đã thanh toán"
@@ -881,6 +908,16 @@ const BillManagement = () => {
           bill={printBill}
           items={buildItemsForPrint(printBill)}
           onPrinted={() => setPrintBill(null)}
+        />
+      )}
+
+      {/* Discount modal */}
+      {discountBill && (
+        <DiscountModal
+          bill={discountBill}
+          items={buildItemsForPrint(discountBill)}
+          onConfirm={(data) => handleConfirmPayment(discountBill, data)}
+          onClose={() => setDiscountBill(null)}
         />
       )}
     </div>
