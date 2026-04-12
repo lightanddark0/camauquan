@@ -167,9 +167,15 @@ async function lookupName(id, collections = ['orderItems', 'menuItems']) {
 // ── Track items da in ────────────────────────────────────────────────────────
 // Key cho mon moi:        "billId:orderItemId"          (in 1 lan)
 // Key cho tang so luong:  "billId:orderItemId:delta:addedAt"  (moi lan tang = key moi)
+// Key cho custom item moi: "billId:custom:addedAt"      (moi addedAt = key moi)
 const printedItems = new Set();
 
 function buildItemKey(billId, item, index) {
+  // Custom item moi: dung addedAt lam key de tranh trung voi custom item cu (cung index)
+  if (item.customDescription) {
+    if (item.addedAt) return `${billId}:custom:${item.addedAt}`;
+    return `${billId}:custom:${index}`;
+  }
   const id = item.orderItemId || item.menuItemId || index;
   if (item.addedQty > 0 && item.addedAt) {
     return `${billId}:${id}:delta:${item.addedAt}`;

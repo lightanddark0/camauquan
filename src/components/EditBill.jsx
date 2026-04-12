@@ -67,6 +67,7 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
           id: `custom_${Math.random()}`,
           customDescription: item.customDescription,
           customAmount: item.customAmount,
+          _orig: true,
         });
       }
     });
@@ -251,11 +252,12 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
           // Giữ nguyên hoặc giảm
           return { menuItemId, quantity };
         }),
-        // custom items
-        ...customItems.map(({ customDescription, customAmount }) => ({
-          customDescription,
-          customAmount,
-        })),
+        // custom items: món mới (không có _orig) gắn addedAt để kitchen-listener in
+        ...customItems.map(({ customDescription, customAmount, _orig }) => (
+          _orig
+            ? { customDescription, customAmount }
+            : { customDescription, customAmount, addedAt }
+        )),
       ];
 
       await updateDoc(doc(db, 'bills', bill.id), {
