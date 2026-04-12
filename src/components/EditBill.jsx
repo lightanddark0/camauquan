@@ -91,7 +91,7 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
 
   // --- Thêm menuItem vào legacyItems ---
   const addMenuItem = (m) => {
-    const step = DECIMAL_CATEGORIES.includes(m.category) ? 1 : 1;
+    const step = DECIMAL_CATEGORIES.includes(m.category) ? 0.05 : 1;
     setLegacyItems(prev => {
       const existing = prev.find(li => li.menuItemId === m.id);
       if (existing) {
@@ -127,7 +127,7 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
   const DECIMAL_CATEGORIES = ['mon_ca', 'hai_san'];
   const getLegacyStep = (menuItemId) => {
     const item = menuItems.find(m => m.id === menuItemId);
-    return item && DECIMAL_CATEGORIES.includes(item.category) ? 1 : 1;
+    return item && DECIMAL_CATEGORIES.includes(item.category) ? 0.05 : 1;
   };
 
   const updateLegacyQty = (menuItemId, newQty, menuItemRef) => {
@@ -442,7 +442,7 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
                 {filteredMenuItems.map(m => {
                   const legacyItem = legacyItems.find(li => li.menuItemId === m.id);
                   const qty = legacyItem?.quantity ?? 0;
-                  const step = DECIMAL_CATEGORIES.includes(m.category) ? 1 : 1;
+                  const step = DECIMAL_CATEGORIES.includes(m.category) ? 0.05 : 1;
                   const isDecimal = DECIMAL_CATEGORIES.includes(m.category);
                   const displayValue = isDecimal ? Number(qty).toFixed(2) : qty;
                   return (
@@ -462,7 +462,7 @@ const EditBill = ({ bill, onClose, onUpdated }) => {
                         <input
                           type="number"
                           value={displayValue}
-                          step={isDecimal ? 'any' : step}
+                          step={step}
                           min="0"
                           onChange={(e) => {
                             const raw = isDecimal ? parseFloat(e.target.value) : parseInt(e.target.value);

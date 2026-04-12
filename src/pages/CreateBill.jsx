@@ -105,7 +105,7 @@ const CreateBill = () => {
   const totalFixedCostWithCustom = billSummary.totalFixedCost + customTotals.totalFixedCost;
 
   const DECIMAL_CATEGORIES = ['mon_ca', 'hai_san'];
-  const getStep = (category) => DECIMAL_CATEGORIES.includes(category) ? 1 : 1;
+  const getStep = (category) => DECIMAL_CATEGORIES.includes(category) ? 0.05 : 1;
 
   const handleQuantityChange = (menuItemId, change, step = 1) => {
     const currentQuantity = quantities[menuItemId] || 0;
@@ -422,7 +422,7 @@ const CreateBill = () => {
                     onChange={(e) => setQuantityDirectly(item.id, e.target.value, isDecimal)}
                     className="w-16 text-center border rounded-md py-1 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     min="0"
-                    step={isDecimal ? 'any' : step}
+                    step={step}
                   />
                   
                   <button
