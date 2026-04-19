@@ -131,7 +131,7 @@ function buildKitchenBuffer(tableLabel, time, itemName, qty) {
 }
 
 // ── Gui lenh in qua TCP ───────────────────────────────────────────────────────
-function sendToPrinter(buf) {
+function sendToPrinterOnce(buf, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     const sock = createConnection({ host: PRINTER_IP, port: PRINTER_PORT }, () => {
       sock.write(buf, err => {
@@ -141,8 +141,21 @@ function sendToPrinter(buf) {
       });
     });
     sock.on('error', reject);
-    sock.setTimeout(5000, () => { sock.destroy(); reject(new Error('timeout')); });
+    sock.setTimeout(timeoutMs, () => { sock.destroy(); reject(new Error('timeout')); });
   });
+}
+
+async function sendToPrinter(buf) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await sendToPrinterOnce(buf);
+      return;
+    } catch (err) {
+      if (attempt === 3) throw err;
+      log(`  [RETRY ${attempt}] ${err.message} — thu lai sau 2s...`);
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
 }
 
 // ── Cache ten mon (ca orderItems lan menuItems) ───────────────────────────────
@@ -228,7 +241,6 @@ async function handleBillChange(docSnap, changeType) {
     }
 
     printedItems.add(itemKey);
-    printedCount++;
 
     // So luong can in:
     // - Tang SL: chi in phan tang them (addedQty), khong in lai ca mon
@@ -246,9 +258,12 @@ async function handleBillChange(docSnap, changeType) {
     try {
       const buf = buildKitchenBuffer(tableLabel, time, name, qty);
       await sendToPrinter(buf);
+      printedCount++;
       log(`  [OK] ${tableLabel} - ${name} x${qty}${isDelta ? ` (them ${qty})` : ''}`);
     } catch (err) {
       log(`  [LOI] ${tableLabel} - ${name} x${qty}: ${err.message}`);
+      // Xoa key khoi Set de lan sau thu lai neu dung lai listener
+      printedItems.delete(itemKey);
     }
   }
 

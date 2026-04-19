@@ -10,7 +10,7 @@ const Layout = ({ children }) => {
   const location = useLocation();
 
   const navigationItems = [
-    { path: '/', label: 'Tạo đơn hàng', icon: Home },
+    { path: '/', label: 'Chọn bàn', icon: Home },
     { path: '/bills', label: 'Quản lý đơn hàng', icon: FileText },
     { path: '/reports', label: 'Báo cáo', icon: BarChart3 },
     { path: '/dish-analysis', label: 'Tổng kết món', icon: PieChart },

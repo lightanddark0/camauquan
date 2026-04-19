@@ -3,12 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { toast } from 'react-toastify';
-import { Plus, Minus, ChevronDown, ChevronUp, MessageSquare, X, ShoppingCart } from 'lucide-react';
+import { Plus, Minus, ChevronDown, ChevronUp, MessageSquare, X, ShoppingCart, Search } from 'lucide-react';
 import { submitCustomerOrder, testFirestoreConnection, getActiveBillForTable } from '../utils/customerOrder';
 import { calculateOrderItemTotals } from '../utils/billCalculations';
 import { printKitchenTickets } from '../utils/kitchenPrint';
 
-// Bỏ "Tất cả" — mỗi category là 1 section cuộn tới
 const CATEGORIES = [
   { value: 'oc', label: 'Ốc' },
   { value: 'hai_san', label: 'Hải sản' },
@@ -24,9 +23,7 @@ const CATEGORIES = [
 const formatCurrency = (amount) =>
   new Intl.NumberFormat('vi-VN').format(amount) + ' ₫';
 
-// ──────────────────────────────────────────────
-// Skeleton card (grid 2-col)
-// ──────────────────────────────────────────────
+// ── Skeleton ──────────────────────────────────
 const SkeletonCard = () => (
   <div className="space-y-5 animate-pulse">
     <div className="h-4 w-1/4 bg-white/50 rounded" />
@@ -42,12 +39,10 @@ const SkeletonCard = () => (
   </div>
 );
 
-// ──────────────────────────────────────────────
-// Confirm modal (bottom sheet on mobile, swipe-down to close)
-// ──────────────────────────────────────────────
+// ── Confirm modal (bottom sheet, swipe-down to close) ──
 const SWIPE_CLOSE_THRESHOLD = 80;
 
-const ConfirmModal = ({ items, note, totalRevenue, onConfirm, onCancel, isSubmitting }) => {
+const ConfirmModal = ({ items, customItems, note, totalRevenue, onConfirm, onCancel, isSubmitting }) => {
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const startYRef = useRef(null);
@@ -111,6 +106,15 @@ const ConfirmModal = ({ items, note, totalRevenue, onConfirm, onCancel, isSubmit
                 <span className="text-indigo-600 font-semibold">{formatCurrency(item.revenue)}</span>
               </li>
             ))}
+            {customItems?.map((item) => (
+              <li key={item.id} className="py-2.5 flex justify-between items-center text-sm">
+                <span className="text-gray-800 font-medium">
+                  {item.customDescription}
+                  <span className="ml-1 text-gray-400 font-normal">×1</span>
+                </span>
+                <span className="text-amber-600 font-semibold">{formatCurrency(item.customAmount)}</span>
+              </li>
+            ))}
           </ul>
           {note?.trim() && (
             <div className="mt-3 bg-amber-50 rounded-xl p-3 text-sm text-amber-800">
@@ -155,6 +159,7 @@ const CustomerOrder = () => {
   const [orderItems, setOrderItems] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
   const [quantities, setQuantities] = useState({});
+  const [customItems, setCustomItems] = useState([]); // { id, customDescription, customAmount }
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [loadingOrderItems, setLoadingOrderItems] = useState(true);
@@ -162,19 +167,17 @@ const CustomerOrder = () => {
   const [loadingExistingBill, setLoadingExistingBill] = useState(true);
 
   const [existingBill, setExistingBill] = useState(null);
-  const [showExistingBill, setShowExistingBill] = useState(false);
 
   const [note, setNote] = useState('');
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [customItemPrice, setCustomItemPrice] = useState('');
+  const [cartOpen, setCartOpen] = useState(false);
 
   // ── Khoá scroll body khi modal mở ──
   useEffect(() => {
-    if (showConfirmModal) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
+    document.body.style.overflow = showConfirmModal ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [showConfirmModal]);
 
@@ -183,6 +186,7 @@ const CustomerOrder = () => {
   const headerRef = useRef(null);
   const tabsContainerRef = useRef(null);
   const sectionRefs = useRef({});
+  const isSearching = searchText.trim().length > 0;
 
   const isLoading = loadingOrderItems || loadingMenuItems;
 
@@ -212,14 +216,14 @@ const CustomerOrder = () => {
   useEffect(() => {
     if (!tableNumber) { setLoadingExistingBill(false); return; }
     getActiveBillForTable(tableNumber)
-      .then((bill) => { setExistingBill(bill); if (bill) setShowExistingBill(true); })
+      .then((bill) => { setExistingBill(bill); })
       .catch((err) => console.error(err))
       .finally(() => setLoadingExistingBill(false));
   }, [tableNumber]);
 
-  // ── Scrollspy: dùng IntersectionObserver (hoạt động ổn trên cả mobile lẫn desktop) ──
+  // ── Scrollspy ──
   useEffect(() => {
-    // Chờ đến khi data load xong, các section ref mới được gắn vào DOM
+    if (isSearching) return;
     const hasSections = CATEGORIES.some((cat) => sectionRefs.current[cat.value]);
     if (!hasSections) return;
 
@@ -314,33 +318,58 @@ const CustomerOrder = () => {
     });
   }, []);
 
+  const customTotal = useMemo(() =>
+    customItems.reduce((s, i) => s + i.customAmount, 0), [customItems]);
+
+  const grandTotal = summary.totalRevenue + customTotal;
+  const grandItems = summary.totalItems + customItems.length;
+
+  const handleAddCustom = () => {
+    const name = searchText.trim();
+    const price = parseFloat(customItemPrice);
+    if (!name || isNaN(price) || price < 0) return;
+    setCustomItems((prev) => [...prev, { id: `c_${Date.now()}`, customDescription: name, customAmount: price }]);
+    setSearchText('');
+    setCustomItemPrice('');
+    toast.success(`Đã thêm "${name}"`);
+  };
+
   const handleSubmitClick = () => {
-    if (summary.totalItems === 0) { navigate(`/bill/${tableNumber}`); return; }
+    if (grandItems === 0) {
+      if (!isTakeawayTable) { navigate(`/bill/${tableNumber}`); }
+      return;
+    }
     if (summary.invalidItems.length > 0)
       toast.warn(`Một số món chưa có giá: ${summary.invalidItems.join(', ')}. Vui lòng liên hệ nhân viên.`);
+    setCartOpen(false);
     setShowConfirmModal(true);
   };
 
   const handleConfirmOrder = async () => {
     setIsSubmitting(true);
     try {
-      const billItems = summary.items.map(({ orderItemId, quantity, name }) => ({ orderItemId, quantity, name }));
+      const billItems = [
+        ...summary.items.map(({ orderItemId, quantity, name }) => ({ orderItemId, quantity, name })),
+        ...customItems.map(({ customDescription, customAmount }) => ({ customDescription, customAmount })),
+      ];
       const ok = await testFirestoreConnection();
       if (!ok) throw new Error('Firestore connection failed');
       await submitCustomerOrder(
         tableNumber,
         billItems,
-        summary.totalRevenue,
-        summary.totalProfit,
+        grandTotal,
+        summary.totalProfit + customTotal,
         note,
         summary.totalCost,
         summary.totalFixedCost
       );
 
-      // In phiếu bếp (non-blocking, không chờ)
       printKitchenTickets(
         isTakeawayTable ? 'Mang về' : `Bàn ${tableNumber}`,
-        summary.items
+        [
+          ...summary.items,
+          ...customItems.map(c => ({ name: c.customDescription, quantity: 1 })),
+        ]
       );
 
       if (isTakeawayTable && existingBill?.takeawayNumber) {
@@ -411,96 +440,177 @@ const CustomerOrder = () => {
     [groupedByCategory]
   );
 
+  // ── Search results (flat list) ──
+  const searchResults = useMemo(() => {
+    const t = searchText.trim().toLowerCase();
+    if (!t) return [];
+    return orderItems.filter((oi) => oi.isAvailable !== false && oi.name?.toLowerCase().includes(t));
+  }, [orderItems, searchText]);
+
   // ════════════════════════════════════════════
   // RENDER
   // ════════════════════════════════════════════
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-100 via-purple-50 to-indigo-100 pb-28">
+    <div className="min-h-screen bg-gradient-to-br from-violet-100 via-purple-50 to-indigo-100 pb-16">
 
       {/* ── Sticky header ── */}
       <div ref={headerRef} className="bg-white/80 backdrop-blur-md sticky top-0 z-10 shadow-sm">
 
         {/* Title row */}
-        <div className="px-5 py-2 border-b border-white/50 flex items-center gap-3">
-          <span className="text-xs text-gray-400 font-medium uppercase tracking-wider shrink-0">Ốc đây nè</span>
-          <span className="text-gray-300 text-sm">·</span>
-          <span className="text-xl font-extrabold text-gray-900 tracking-tight">
-            {isTakeawayTable
-              ? `🥡 Mang về${existingBill?.takeawayNumber ? ` ${existingBill.takeawayNumber}` : ''}`
-              : `Bàn ${tableNumber}`}
-          </span>
+        <div className="px-4 pt-3 pb-2 flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-gray-400 font-medium uppercase tracking-wider leading-none mb-0.5">Ốc đây nè</p>
+            <p className="text-xl font-extrabold text-gray-900 leading-tight truncate">
+              {isTakeawayTable
+                ? `🥡 Mang về${existingBill?.takeawayNumber ? ` ${existingBill.takeawayNumber}` : ''}`
+                : `Bàn ${tableNumber}`}
+            </p>
+          </div>
           {existingBill && !loadingExistingBill && (
-            <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full">
+            <span className="flex-shrink-0 px-2.5 py-1 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full">
               Đã có đơn
             </span>
           )}
         </div>
 
-        {/* ── Category tabs (scrollspy underline style) ── */}
-        <div ref={tabsContainerRef} className="overflow-x-auto scrollbar-hide">
-          <div className="flex min-w-max px-2">
-            {(isLoading ? CATEGORIES : visibleCats).map((cat) => (
+        {/* Search bar */}
+        <div className="px-4 pb-2.5">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              placeholder="Tìm kiếm món ăn..."
+              className="w-full pl-9 pr-9 py-2.5 bg-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-colors"
+            />
+            {searchText && (
               <button
-                key={cat.value}
-                data-tab={cat.value}
-                onClick={() => scrollToCategory(cat.value)}
-                className={`px-4 py-3 text-sm font-semibold whitespace-nowrap border-b-2 transition-all duration-150 ${
-                  activeCategory === cat.value
-                    ? 'border-indigo-600 text-indigo-600'
-                    : 'border-transparent text-gray-400 hover:text-gray-600'
-                }`}
+                onClick={() => { setSearchText(''); setCustomItemPrice(''); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
               >
-                {cat.label}
+                <X size={15} />
               </button>
-            ))}
+            )}
           </div>
         </div>
+
+        {/* Category tabs — only when not searching */}
+        {!isSearching && (
+          <div ref={tabsContainerRef} className="overflow-x-auto scrollbar-hide border-t border-gray-100/60">
+            <div className="flex min-w-max px-2">
+              {(isLoading ? CATEGORIES : visibleCats).map((cat) => (
+                <button
+                  key={cat.value}
+                  data-tab={cat.value}
+                  onClick={() => scrollToCategory(cat.value)}
+                  className={`px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-all duration-150 ${
+                    activeCategory === cat.value
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Body ── */}
       <div className="px-4 pt-4 space-y-2">
 
-        {/* Đơn đã gọi */}
-        {!loadingExistingBill && existingBill && existingBillItems.length > 0 && (
-          <div className="bg-amber-50/80 backdrop-blur-sm border border-amber-200/70 rounded-2xl overflow-hidden mb-4">
-            <button
-              onClick={() => setShowExistingBill((v) => !v)}
-              className="w-full flex items-center justify-between px-4 py-3 text-left"
-            >
-              <div>
-                <p className="text-sm font-bold text-amber-800">Đã gọi trước đó</p>
-                <p className="text-xs text-amber-600 mt-0.5">
-                  {existingBillItems.reduce((s, i) => s + i.quantity, 0)} món •{' '}
-                  {formatCurrency(existingBillItems.reduce((s, i) => s + i.price * i.quantity, 0))}
-                </p>
-              </div>
-              {showExistingBill ? <ChevronUp size={18} className="text-amber-600" /> : <ChevronDown size={18} className="text-amber-600" />}
-            </button>
-            {showExistingBill && (
-              <div className="border-t border-amber-200 divide-y divide-amber-100">
-                {existingBillItems.map((item) => (
-                  <div key={item.key} className="flex justify-between items-center px-4 py-2.5 text-sm">
-                    <span className="text-gray-800">{item.name}<span className="ml-1 text-gray-400">×{item.quantity}</span></span>
-                    <span className="text-gray-700 font-medium">{formatCurrency(item.price * item.quantity)}</span>
-                  </div>
-                ))}
-                {existingBill.note && (
-                  <div className="px-4 py-2.5 text-xs text-amber-700 italic">Ghi chú: {existingBill.note}</div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Skeleton khi đang load ── */}
+        {/* Skeleton */}
         {isLoading && (
           <div className="space-y-4">
             <SkeletonCard /><SkeletonCard /><SkeletonCard />
           </div>
         )}
 
-        {/* ── Tất cả categories theo section ── */}
-        {!isLoading && groupedByCategory.map(({ cat, groups }, sectionIndex) => (
+        {/* ── SEARCH MODE: flat list + custom item ── */}
+        {!isLoading && isSearching && (
+          <div className="space-y-2">
+            {searchResults.length === 0 ? (
+              <p className="text-center text-gray-400 py-4 text-sm">
+                Không tìm thấy "<span className="font-semibold">{searchText.trim()}</span>"
+              </p>
+            ) : (
+              searchResults.map((oi) => {
+                const qty = quantities[oi.id] || 0;
+                const pm = menuItems.find((m) => m.id === oi.parentMenuItemId);
+                const totals = calculateOrderItemTotals(oi, pm, 1);
+                return (
+                  <div
+                    key={oi.id}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${
+                      qty > 0 ? 'border-indigo-300 bg-indigo-50' : 'border-gray-100 bg-white/70'
+                    }`}
+                  >
+                    {oi.imageUrl
+                      ? <img src={oi.imageUrl} alt={oi.name} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" onError={(e) => { e.target.style.display = 'none'; }} />
+                      : <div className="w-12 h-12 rounded-xl bg-white/40 flex items-center justify-center text-xl flex-shrink-0">🍽️</div>
+                    }
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 text-sm truncate">{oi.name}</p>
+                      {totals.valid
+                        ? <p className="text-xs text-gray-400">{formatCurrency(totals.price)}</p>
+                        : <p className="text-amber-500 text-xs">Liên hệ nhân viên</p>
+                      }
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {qty > 0 && (
+                        <>
+                          <button
+                            onClick={() => handleQuantityChange(oi.id, -1)}
+                            className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center active:scale-90 transition-all"
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <span className="w-6 text-center text-sm font-bold text-indigo-600">{qty}</span>
+                        </>
+                      )}
+                      <button
+                        onClick={() => handleQuantityChange(oi.id, 1)}
+                        className="w-8 h-8 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center active:scale-90 transition-all shadow-sm"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+
+            {/* Add as custom item */}
+            <div className="mt-2 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <p className="text-sm font-semibold text-amber-800 mb-2.5">
+                Thêm "<span className="font-bold">{searchText.trim()}</span>" làm món tự chọn
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={customItemPrice}
+                  onChange={(e) => setCustomItemPrice(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
+                  placeholder="Giá tiền (₫)"
+                  className="flex-1 px-3 py-2.5 border border-amber-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                />
+                <button
+                  onClick={handleAddCustom}
+                  disabled={!customItemPrice || isNaN(parseFloat(customItemPrice))}
+                  className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-200 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-1.5"
+                >
+                  <Plus size={14} />
+                  Thêm
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── BROWSE MODE: category sections ── */}
+        {!isLoading && !isSearching && groupedByCategory.map(({ cat, groups }, sectionIndex) => (
           <section
             key={cat.value}
             ref={(el) => { sectionRefs.current[cat.value] = el; }}
@@ -508,67 +618,43 @@ const CustomerOrder = () => {
             className="pt-4 animate-fade-slide-up"
             style={{ animationDelay: `${sectionIndex * 60}ms` }}
           >
-            {/* Section header */}
             <div className="flex items-center gap-3 mb-3">
               <h2 className="text-base font-bold text-gray-800/90">{cat.label}</h2>
               <div className="flex-1 h-px bg-white/60" />
             </div>
-
-            {/* Groups */}
             <div className="space-y-4">
               {groups.map((group) => (
                 <div key={group.parent.id}>
-                  {/* Group label (chỉ hiển thị nếu không phải standalone) */}
                   {!group.parent.isStandalone && (
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-0.5">
                       {group.parent.name}
                     </p>
                   )}
-
-                  {/* Grid 2 cột */}
                   <div className="grid grid-cols-2 gap-3">
                     {group.items.map((oi) => {
                       const qty = quantities[oi.id] || 0;
-                      const pm = group.parent.isStandalone ? null : menuItems.find((m) => m.id === oi.parentMenuItemId);
+                      const pm = menuItems.find((m) => m.id === oi.parentMenuItemId);
                       const totals = calculateOrderItemTotals(oi, pm, 1);
-
                       return (
                         <div
                           key={oi.id}
                           onClick={() => handleQuantityChange(oi.id, 1)}
-                          className={`relative bg-white/75 backdrop-blur-sm rounded-2xl overflow-hidden shadow-sm border border-white/60 cursor-pointer select-none
-                            active:scale-[0.96] transition-transform duration-100
+                          className={`relative bg-white/75 backdrop-blur-sm rounded-2xl overflow-hidden shadow-sm border border-white/60 cursor-pointer select-none active:scale-[0.96] transition-transform duration-100
                             ${qty > 0 ? 'ring-2 ring-indigo-400 ring-offset-1' : ''}
                             ${oi.fullWidth ? 'col-span-2' : ''}
                             ${oi.breakBefore ? 'col-start-1' : ''}`}
                         >
-                          {/* Image area */}
                           <div className="relative">
-                            {oi.imageUrl ? (
-                              <img
-                                src={oi.imageUrl} alt={oi.name}
-                                className="w-full aspect-square object-cover"
-                                onError={(e) => { e.target.style.display = 'none'; }}
-                              />
-                            ) : (
-                              <div className="w-full aspect-square bg-white/40 flex items-center justify-center text-3xl">🍽️</div>
-                            )}
-
-                            {/* Quantity badge — góc trên trái */}
+                            {oi.imageUrl
+                              ? <img src={oi.imageUrl} alt={oi.name} className="w-full aspect-square object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+                              : <div className="w-full aspect-square bg-white/40 flex items-center justify-center text-3xl">🍽️</div>
+                            }
                             {qty > 0 && (
-                              <span
-                                key={qty}
-                                className="absolute top-2 left-2 bg-indigo-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center animate-badge-pop shadow-md z-10"
-                              >
+                              <span key={qty} className="absolute top-2 left-2 bg-indigo-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center animate-badge-pop shadow-md z-10">
                                 {qty}
                               </span>
                             )}
-
-                            {/* Controls — góc dưới phải ảnh */}
-                            <div
-                              className="absolute bottom-2 right-2 flex items-center gap-1 z-10"
-                              onClick={(e) => e.stopPropagation()}
-                            >
+                            <div className="absolute bottom-2 right-2 flex items-center gap-1 z-10" onClick={(e) => e.stopPropagation()}>
                               {qty > 0 && (
                                 <button
                                   onClick={() => handleQuantityChange(oi.id, -1)}
@@ -585,8 +671,6 @@ const CustomerOrder = () => {
                               </button>
                             </div>
                           </div>
-
-                          {/* Info */}
                           <div className="p-2.5">
                             <p className="font-bold text-gray-900 text-sm leading-snug line-clamp-2">{oi.name}</p>
                             {totals.valid
@@ -604,74 +688,179 @@ const CustomerOrder = () => {
           </section>
         ))}
 
-        {/* ── Ghi chú ── */}
-        {!isLoading && (
-          <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-white/60 shadow-sm overflow-hidden mt-6">
-            <button
-              onClick={() => setShowNoteInput((v) => !v)}
-              className="w-full flex items-center justify-between px-4 py-3 text-left"
-            >
-              <div className="flex items-center gap-2 text-gray-600">
-                <MessageSquare size={16} />
-                <span className="text-sm font-medium">
-                  {note.trim() ? 'Ghi chú đã thêm' : 'Thêm ghi chú (ít cay, không hành...)'}
-                </span>
-              </div>
-              {showNoteInput ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-            </button>
-            {showNoteInput && (
-              <div className="border-t border-gray-100 px-4 pb-4">
-                <textarea
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="VD: ít cay, không hành, ít đá..."
-                  rows={3}
-                  className="w-full mt-3 px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none outline-none"
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Padding cuối trang */}
-        <div className="h-6" />
+        <div className="h-4" />
       </div>
 
-      {/* ── Floating cart button ── */}
-      <div className="fixed bottom-0 left-0 right-0 px-4 py-2.5 bg-white/80 backdrop-blur-md border-t border-white/40 z-20 flex justify-center">
-        <button
-          onClick={handleSubmitClick}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-8 rounded-2xl flex items-center justify-center gap-2 transition-all duration-200 shadow-lg active:scale-[0.98] min-w-[200px]"
+      {/* ════════════════════════════════════════════
+          BOTTOM CART DRAWER
+          ════════════════════════════════════════════ */}
+
+      {cartOpen && (
+        <div className="fixed inset-0 z-20 bg-black/20" onClick={() => setCartOpen(false)} />
+      )}
+
+      <div className="fixed inset-x-0 bottom-0 z-30">
+        {/* Collapsed bar — always 56px visible */}
+        <div
+          className={`px-4 cursor-pointer select-none transition-colors ${
+            grandItems > 0 ? 'bg-indigo-600' : 'bg-white border-t border-gray-200'
+          }`}
+          style={{ height: 56 }}
+          onClick={() => setCartOpen((v) => !v)}
         >
-          {summary.totalItems === 0 && !isTakeawayTable ? (
-            <>
-              <ShoppingCart size={17} />
-              <span className="text-sm font-semibold">Xem hóa đơn</span>
-            </>
-          ) : summary.totalItems === 0 && isTakeawayTable ? (
-            <span className="text-sm font-semibold text-white/70">Chọn món để thêm vào đơn</span>
-          ) : (
-            <>
-              <ShoppingCart size={17} />
-              <span className="text-sm font-semibold">Đặt</span>
-              <span
-                key={summary.totalItems}
-                className="animate-bump bg-white/20 rounded-lg px-2 py-0.5 text-sm font-bold"
+          <div className="flex items-center justify-between h-full gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <ShoppingCart size={18} className={grandItems > 0 ? 'text-white flex-shrink-0' : 'text-indigo-600 flex-shrink-0'} />
+              {grandItems === 0 ? (
+                <span className={`text-sm font-semibold ${isTakeawayTable ? 'text-gray-400' : 'text-indigo-600'}`}>
+                  {isTakeawayTable ? 'Chọn món để thêm vào đơn' : 'Xem hóa đơn'}
+                </span>
+              ) : (
+                <span className="text-white font-bold text-sm truncate">
+                  {grandItems} món · {formatCurrency(grandTotal)}
+                </span>
+              )}
+            </div>
+            <ChevronUp
+              size={18}
+              className={`flex-shrink-0 transition-transform duration-300 ${cartOpen ? 'rotate-180' : ''} ${grandItems > 0 ? 'text-white' : 'text-gray-400'}`}
+            />
+          </div>
+        </div>
+
+        {/* Expanded panel — slides up with max-h transition */}
+        <div className={`bg-white overflow-hidden transition-all duration-300 ease-in-out ${cartOpen ? 'max-h-[68vh]' : 'max-h-0'}`}>
+          <div className="overflow-y-auto" style={{ maxHeight: '68vh' }}>
+            <div className="px-4 pt-4 pb-6 space-y-4">
+
+              {/* Previously ordered */}
+              {existingBillItems.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-2">Đã gọi trước đó</p>
+                  <div className="bg-amber-50 rounded-xl overflow-hidden divide-y divide-amber-100">
+                    {existingBillItems.map((item) => (
+                      <div key={item.key} className="flex justify-between items-center px-3 py-2.5 text-sm">
+                        <span className="text-gray-700">{item.name}<span className="ml-1 text-gray-400">×{item.quantity}</span></span>
+                        <span className="text-gray-600 font-medium">{formatCurrency(item.price * item.quantity)}</span>
+                      </div>
+                    ))}
+                    {existingBill?.note && (
+                      <div className="px-3 py-2 text-xs text-amber-600 italic">Ghi chú: {existingBill.note}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* New items being selected */}
+              {(summary.items.length > 0 || customItems.length > 0) ? (
+                <div>
+                  <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-2">Đang chọn</p>
+                  <div className="bg-indigo-50 rounded-xl overflow-hidden divide-y divide-indigo-100">
+                    {summary.items.map((item) => (
+                      <div key={item.orderItemId} className="flex items-center gap-2 px-3 py-2.5">
+                        <span className="flex-1 text-sm text-gray-800 min-w-0 truncate">{item.name}</span>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => handleQuantityChange(item.orderItemId, -1)}
+                            className="w-6 h-6 rounded-full bg-white border border-gray-200 flex items-center justify-center active:scale-90 transition-all"
+                          >
+                            <Minus size={11} />
+                          </button>
+                          <span className="w-5 text-center text-sm font-bold text-indigo-600">{item.quantity}</span>
+                          <button
+                            onClick={() => handleQuantityChange(item.orderItemId, 1)}
+                            className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center active:scale-90 transition-all"
+                          >
+                            <Plus size={11} />
+                          </button>
+                        </div>
+                        <span className="text-xs font-semibold text-indigo-600 w-20 text-right flex-shrink-0">
+                          {formatCurrency(item.revenue)}
+                        </span>
+                      </div>
+                    ))}
+                    {customItems.map((item) => (
+                      <div key={item.id} className="flex items-center gap-2 px-3 py-2.5">
+                        <span className="flex-1 text-sm text-gray-800 min-w-0 truncate">{item.customDescription}</span>
+                        <button
+                          onClick={() => setCustomItems((prev) => prev.filter((c) => c.id !== item.id))}
+                          className="text-gray-300 hover:text-red-500 transition-colors p-0.5 flex-shrink-0"
+                        >
+                          <X size={14} />
+                        </button>
+                        <span className="text-xs font-semibold text-amber-600 w-20 text-right flex-shrink-0">
+                          {formatCurrency(item.customAmount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-5 text-gray-400 text-sm">
+                  Chưa chọn món — bấm vào món để thêm
+                </div>
+              )}
+
+              {/* Grand total */}
+              {grandItems > 0 && (
+                <div className="flex justify-between items-center py-1 border-t border-gray-100">
+                  <span className="font-bold text-gray-900">Tổng cộng</span>
+                  <span className="font-bold text-indigo-600 text-lg">{formatCurrency(grandTotal)}</span>
+                </div>
+              )}
+
+              {/* Note */}
+              <div className="bg-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                <button
+                  onClick={() => setShowNoteInput((v) => !v)}
+                  className="w-full flex items-center justify-between px-4 py-3 text-left"
+                >
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <MessageSquare size={15} />
+                    <span className="text-sm font-medium">
+                      {note.trim() ? 'Ghi chú đã thêm' : 'Thêm ghi chú (ít cay, không hành...)'}
+                    </span>
+                  </div>
+                  {showNoteInput ? <ChevronUp size={15} className="text-gray-400" /> : <ChevronDown size={15} className="text-gray-400" />}
+                </button>
+                {showNoteInput && (
+                  <div className="border-t border-gray-100 px-4 pb-4">
+                    <textarea
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      placeholder="VD: ít cay, không hành, ít đá..."
+                      rows={2}
+                      className="w-full mt-3 px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Order button */}
+              <button
+                onClick={handleSubmitClick}
+                disabled={grandItems === 0 && isTakeawayTable}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-md"
               >
-                {summary.totalItems}
-              </span>
-              <span className="text-sm font-semibold">món</span>
-            </>
-          )}
-        </button>
+                {grandItems === 0 && !isTakeawayTable
+                  ? <><ShoppingCart size={17} />Xem hóa đơn</>
+                  : grandItems === 0
+                    ? 'Chọn món để đặt'
+                    : <><ShoppingCart size={17} />Đặt {grandItems} món · {formatCurrency(grandTotal)}</>
+                }
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── Confirm Modal ── */}
       {showConfirmModal && (
         <ConfirmModal
           items={summary.items}
+          customItems={customItems}
           note={note}
-          totalRevenue={summary.totalRevenue}
+          totalRevenue={grandTotal}
           onConfirm={handleConfirmOrder}
           onCancel={() => !isSubmitting && setShowConfirmModal(false)}
           isSubmitting={isSubmitting}

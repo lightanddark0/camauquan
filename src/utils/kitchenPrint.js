@@ -24,7 +24,7 @@ export async function printKitchenTickets(tableLabel, items) {
     const res = await fetch(KITCHEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(10000),
       body: JSON.stringify({
         tableLabel,
         time,
@@ -40,6 +40,7 @@ export async function printKitchenTickets(tableLabel, items) {
       console.warn('[KitchenPrint] Lỗi server:', err.error);
     }
   } catch {
-    console.warn('[KitchenPrint] Không kết nối được print server');
+    // Không in được qua HTTP (thiết bị không cùng mạng LAN) — bếp sẽ in qua kitchen-listener
+    console.warn('[KitchenPrint] Không kết nối được print server — kitchen-listener sẽ xử lý');
   }
 }

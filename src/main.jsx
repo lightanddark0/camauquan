@@ -8,6 +8,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import Layout from './components/Layout';
 import PasswordGate from './components/PasswordGate';
 import CreateBill from './pages/CreateBill';
+import TableSelection from './pages/TableSelection';
 import MenuManagement from './pages/MenuManagement';
 import BillManagement from './pages/BillManagement';
 import Reports from './pages/Reports';
@@ -47,7 +48,8 @@ const ProtectedRoutes = () => {
   return (
     <Layout>
       <Routes>
-        <Route path="/" element={<CreateBill />} />
+        <Route path="/" element={<TableSelection />} />
+        <Route path="/create/:tableNumber" element={<CreateBill />} />
         <Route path="/menu" element={<MenuManagement />} />
         <Route path="/bills" element={<BillManagement />} />
         <Route path="/reports" element={<Reports />} />

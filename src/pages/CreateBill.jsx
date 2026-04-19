@@ -1,37 +1,26 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { useParams, useNavigate } from 'react-router-dom';
+import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useApp } from '../context/AppContext';
 import { toast } from 'react-toastify';
 import CustomerPageModal from '../components/CustomerPageModal';
-import { Plus, Minus, ShoppingCart, Calculator, ExternalLink } from 'lucide-react';
+import { Plus, Minus, ShoppingCart, Calculator, ExternalLink, Search, ArrowLeft, X } from 'lucide-react';
 import { VoiceOrderButton } from '../components/VoiceOrderButton';
 import { getVoiceOrderMetrics } from '../utils/voiceOrderMetrics';
-import CustomItemForm from '../components/CustomItemForm';
-
-// Categories for menu items
-const CATEGORIES = [
-  { value: 'oc', label: 'Ốc' },
-  { value: 'hai_san', label: 'Hải sản' },
-  { value: 'mon_ca', label: 'Món cá' },
-  { value: 'khai_vi', label: 'Khai vị' },
-  { value: 'com_mi', label: 'Cơm - Mì' },
-  { value: 'mon_thit', label: 'Món thịt' },
-  { value: 'lau', label: 'Lẩu' },
-  { value: 'mon_them', label: 'Món thêm' },
-  { value: 'giai_khat', label: 'Giải khát' },
-  { value: 'all', label: 'Tất cả' }
-];
 
 const CreateBill = () => {
   const { menuItems, tables } = useApp();
+  const { tableNumber } = useParams();
+  const navigate = useNavigate();
   const [quantities, setQuantities] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('oc');
-  const [selectedTable, setSelectedTable] = useState('');
+  const [searchText, setSearchText] = useState('');
+  const [customItemPrice, setCustomItemPrice] = useState('');
   const [showCustomerOrderModal, setShowCustomerOrderModal] = useState(false);
   const [bills, setBills] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const searchInputRef = useRef(null);
 
   // Custom items (món khác) cho CreateBill
   const [customItems, setCustomItems] = useState([]);
@@ -152,8 +141,8 @@ const CreateBill = () => {
       return;
     }
 
-    if (!selectedTable) {
-      toast.error('Vui lòng chọn số bàn');
+    if (!tableNumber) {
+      toast.error('Không xác định được số bàn');
       return;
     }
 
@@ -161,40 +150,95 @@ const CreateBill = () => {
 
     try {
       const today = new Date();
-      const dateString = today.toISOString().split('T')[0]; // YYYY-MM-DD
+      const dateString = today.toISOString().split('T')[0];
 
-      const menuBillItems = billSummary.items.map(item => ({
+      const newMenuItems = billSummary.items.map(item => ({
         menuItemId: item.menuItemId,
         quantity: item.quantity
       }));
-
-      const customBillItems = customItems.map(item => ({
+      const newCustomItems = customItems.map(item => ({
         customDescription: item.customDescription,
         customAmount: item.customAmount
       }));
 
-      const billData = {
-        createdAt: serverTimestamp(),
-        date: dateString,
-        tableNumber: parseInt(selectedTable), // Convert to number
-        status: 'pending', // pending, paid
-        items: [...menuBillItems, ...customBillItems],
-        totalRevenue: totalRevenueWithCustom,
-        totalProfit: totalProfitWithCustom,
-        totalCost: totalCostWithCustom,
-        totalFixedCost: totalFixedCostWithCustom
-      };
+      // Tìm đơn pending đang mở cho bàn này hôm nay
+      const existingBill = bills.find(
+        b => b.status === 'pending' && !b.isTakeaway && b.tableNumber === parseInt(tableNumber)
+      );
 
-      await addDoc(collection(db, 'bills'), billData);
-      
+      if (existingBill) {
+        // Merge items vào đơn cũ
+        // addedAt phải được gắn để kitchen-listener nhận ra món mới và in
+        const addedAt = new Date().toISOString();
+        const mergedItems = [...(existingBill.items || [])];
+
+        newMenuItems.forEach(newItem => {
+          const idx = mergedItems.findIndex(
+            ex => ex.menuItemId && ex.menuItemId === newItem.menuItemId
+          );
+          if (idx >= 0) {
+            const addedQty = newItem.quantity;
+            mergedItems[idx] = {
+              ...mergedItems[idx],
+              quantity: parseFloat((mergedItems[idx].quantity + addedQty).toFixed(2)),
+              addedQty,      // delta — kitchen-listener dùng để in đúng số lượng
+              addedAt,       // timestamp — kitchen-listener dùng để phân biệt mới/cũ
+              kitchenStatus: 'cooking',
+            };
+          } else {
+            mergedItems.push({ ...newItem, addedAt });
+          }
+        });
+
+        // Custom items luôn append
+        newCustomItems.forEach(c => mergedItems.push({ ...c, addedAt }));
+
+        // Tính lại tổng từ merged items
+        let totalRevenue = existingBill.totalRevenue || 0;
+        let totalProfit = existingBill.totalProfit || 0;
+        let totalCost = existingBill.totalCost || 0;
+        let totalFixedCost = existingBill.totalFixedCost || 0;
+
+        totalRevenue += totalRevenueWithCustom;
+        totalProfit += totalProfitWithCustom;
+        totalCost += totalCostWithCustom;
+        totalFixedCost += totalFixedCostWithCustom;
+
+        await updateDoc(doc(db, 'bills', existingBill.id), {
+          items: mergedItems,
+          totalRevenue,
+          totalProfit,
+          totalCost,
+          totalFixedCost
+        });
+
+        toast.success('Đã thêm món vào đơn hiện tại!');
+      } else {
+        // Tạo đơn mới
+        await addDoc(collection(db, 'bills'), {
+          createdAt: serverTimestamp(),
+          date: dateString,
+          tableNumber: parseInt(tableNumber),
+          status: 'pending',
+          items: [...newMenuItems, ...newCustomItems],
+          totalRevenue: totalRevenueWithCustom,
+          totalProfit: totalProfitWithCustom,
+          totalCost: totalCostWithCustom,
+          totalFixedCost: totalFixedCostWithCustom
+        });
+
+        toast.success('Tạo đơn hàng thành công!');
+      }
+
       // Reset form
       setQuantities({});
-      setSelectedTable('');
       setCustomItems([]);
-      toast.success('Tạo đơn hàng thành công!');
+      setSearchText('');
+      setCustomItemPrice('');
+      navigate('/');
     } catch (error) {
-      console.error('Error creating bill:', error);
-      toast.error('Có lỗi xảy ra khi tạo đơn hàng');
+      console.error('Error creating/updating bill:', error);
+      toast.error('Có lỗi xảy ra khi lưu đơn hàng');
     } finally {
       setIsSubmitting(false);
     }
@@ -242,8 +286,8 @@ const CreateBill = () => {
     return () => unsubscribe();
   }, [selectedDate]);
 
-  const handleOpenPublicBill = (tableNumber) => {
-    window.open(`/bill/${tableNumber}`, '_blank');
+  const handleOpenPublicBill = (billTableNumber) => {
+    window.open(`/bill/${billTableNumber}`, '_blank');
     setShowCustomerOrderModal(false);
   };
 
@@ -279,20 +323,30 @@ const CreateBill = () => {
                (b.isTakeaway ? b.takeawayNumber : b.tableNumber);
       });
 
-  // Filter menu items by category
+  // Filter menu items by search text
   const filteredMenuItems = useMemo(() => {
-    if (selectedCategory === 'all') {
-      return menuItems;
-    }
-    return menuItems.filter(item => item.category === selectedCategory);
-  }, [menuItems, selectedCategory]);
+    const trimmed = searchText.trim().toLowerCase();
+    if (!trimmed) return menuItems;
+    return menuItems.filter(item =>
+      item.name?.toLowerCase().includes(trimmed)
+    );
+  }, [menuItems, searchText]);
 
-  // Get count for each category
-  const getCategoryCount = (categoryValue) => {
-    if (categoryValue === 'all') {
-      return menuItems.length;
-    }
-    return menuItems.filter(item => item.category === categoryValue).length;
+  // Handle adding custom item from search bar
+  const handleAddCustomFromSearch = () => {
+    const name = searchText.trim();
+    const price = parseFloat(customItemPrice);
+    if (!name || isNaN(price)) return;
+
+    const newCustomItem = {
+      id: `custom_${Date.now()}_${Math.random()}`,
+      customDescription: name,
+      customAmount: price
+    };
+    setCustomItems(prev => [...prev, newCustomItem]);
+    setCustomItemPrice('');
+    setSearchText('');
+    toast.success(`Đã thêm "${name}"`);
   };
 
   if (menuItems.length === 0) {
@@ -317,119 +371,124 @@ const CreateBill = () => {
     );
   }
 
+  const hasCart = billSummary.totalItems > 0 || customItems.length > 0;
+  const searchTrimmed = searchText.trim();
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="bg-white rounded-lg shadow-sm border p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Tạo đơn hàng</h1>
-          
-          <button
-            onClick={() => setShowCustomerOrderModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-            title="Mở trang khách hàng"
-          >
-            <ExternalLink size={16} />
-            <span>Trang khách</span>
-          </button>
-        </div>
-        
-        {/* Table Selection */}
-        <div className="mb-6">
-          <label htmlFor="table" className="block text-sm font-medium text-gray-700 mb-2">
-            Chọn số bàn *
-          </label>
+    <div className="max-w-2xl mx-auto pb-10">
+      {/* Header */}
+      <div className="bg-white rounded-xl shadow-sm border mb-4 p-4">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <select
-              id="table"
-              value={selectedTable}
-              onChange={(e) => setSelectedTable(e.target.value)}
-              className="flex-1 max-w-xs px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+            <button
+              onClick={() => navigate('/')}
+              className="p-2 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+              title="Quay lại chọn bàn"
             >
-              <option value="">-- Chọn bàn --</option>
-              {tables && tables.map((table) => (
-                <option key={table.id} value={table.number}>
-                  Bàn {table.number} - {table.seats} chỗ
-                </option>
-              ))}
-            </select>
-            
-            {/* Voice Order Button - Cạnh phần chọn bàn */}
-            <VoiceOrderButton 
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Bàn {tableNumber}</h1>
+              <p className="text-xs text-gray-400">Thêm món vào đơn hàng</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Voice Order Button */}
+            <VoiceOrderButton
               menuItems={menuItems}
-              currentCategory={selectedCategory}
+              currentCategory="all"
               onItemsMatched={handleVoiceItemsMatched}
             />
+            <button
+              onClick={() => setShowCustomerOrderModal(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+              title="Mở trang khách hàng"
+            >
+              <ExternalLink size={15} />
+              <span className="hidden sm:inline">Trang khách</span>
+            </button>
           </div>
         </div>
-        
-        {/* Category Tabs */}
-        <div className="mb-6">
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8 overflow-x-auto">
-              {CATEGORIES.map((category) => (
-                <button
-                  key={category.value}
-                  onClick={() => setSelectedCategory(category.value)}
-                  className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
-                    selectedCategory === category.value
-                      ? 'border-indigo-500 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <span>{category.label}</span>
-                  <span className={`inline-flex items-center justify-center w-5 h-5 text-xs rounded-full ${
-                    selectedCategory === category.value
-                      ? 'bg-indigo-100 text-indigo-600'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {getCategoryCount(category.value)}
-                  </span>
-                </button>
-              ))}
-            </nav>
-          </div>
+      </div>
+
+      {/* Search Bar */}
+      <div className="bg-white rounded-xl shadow-sm border mb-4 p-4">
+        <div className="relative">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            placeholder="Tìm kiếm món ăn..."
+            className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent text-base"
+          />
+          {searchText && (
+            <button
+              onClick={() => { setSearchText(''); setCustomItemPrice(''); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <X size={16} />
+            </button>
+          )}
         </div>
-        
-        {/* Menu items */}
-        <div className="space-y-4 mb-6">
+
+        {/* Menu items list */}
+        <div className="mt-3 space-y-2 max-h-[60vh] overflow-y-auto">
+          {filteredMenuItems.length === 0 && !searchTrimmed && (
+            <p className="text-center text-gray-400 py-6 text-sm">Không có món nào</p>
+          )}
+
+          {filteredMenuItems.length === 0 && searchTrimmed && (
+            <p className="text-center text-gray-400 py-4 text-sm">
+              Không tìm thấy "{searchTrimmed}"
+            </p>
+          )}
+
           {filteredMenuItems.map((item) => {
             const quantity = quantities[item.id] || 0;
             const step = getStep(item.category);
             const isDecimal = step < 1;
             const displayValue = isDecimal ? (quantity > 0 ? quantity.toFixed(2) : '0.00') : quantity;
-            
+
             return (
-              <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900">{item.name}</h3>
-                  <p className="text-indigo-600 font-medium">
-                    {formatCurrency(item.price)}
-                  </p>
+              <div
+                key={item.id}
+                className={`flex items-center justify-between px-3 py-3 rounded-lg border transition-colors ${
+                  quantity > 0
+                    ? 'border-indigo-200 bg-indigo-50'
+                    : 'border-gray-100 bg-gray-50'
+                }`}
+              >
+                <div className="flex-1 min-w-0 mr-3">
+                  <p className="font-medium text-gray-900 text-sm truncate">{item.name}</p>
+                  <p className="text-indigo-600 text-sm font-semibold">{formatCurrency(item.price)}</p>
                 </div>
-                
-                <div className="flex items-center space-x-3">
+
+                <div className="flex items-center gap-2 flex-shrink-0">
                   <button
                     onClick={() => handleQuantityChange(item.id, -step, step)}
-                    className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
                     disabled={quantity === 0}
+                    className="w-8 h-8 rounded-full bg-white border border-gray-200 hover:bg-gray-100 flex items-center justify-center transition-colors disabled:opacity-30"
                   >
-                    <Minus size={16} />
+                    <Minus size={14} />
                   </button>
-                  
+
                   <input
                     type="number"
                     value={displayValue}
-                    onChange={(e) => setQuantityDirectly(item.id, e.target.value, isDecimal)}
-                    className="w-16 text-center border rounded-md py-1 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    onChange={e => setQuantityDirectly(item.id, e.target.value, isDecimal)}
+                    className="w-12 text-center border border-gray-200 rounded-md py-1 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
                     min="0"
                     step={step}
                   />
-                  
+
                   <button
                     onClick={() => handleQuantityChange(item.id, step, step)}
-                    className="w-8 h-8 rounded-full bg-indigo-100 hover:bg-indigo-200 flex items-center justify-center transition-colors"
+                    className="w-8 h-8 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition-colors"
                   >
-                    <Plus size={16} />
+                    <Plus size={14} />
                   </button>
                 </div>
               </div>
@@ -437,93 +496,105 @@ const CreateBill = () => {
           })}
         </div>
 
-        {/* Custom items (món khác) */}
-        <CustomItemForm
-          onAdd={({ customDescription, customAmount }) => {
-            const newCustomItem = {
-              id: `custom_${Date.now()}_${Math.random()}`,
-              customDescription,
-              customAmount
-            };
-            setCustomItems(prev => [...prev, newCustomItem]);
-            toast.success('Đã thêm món khác');
-          }}
-        />
-
-        {/* Bill Summary */}
-        {(billSummary.totalItems > 0 || customItems.length > 0) && (
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <div className="flex items-center mb-4">
-              <Calculator className="w-5 h-5 text-indigo-600 mr-2" />
-              <h2 className="text-lg font-semibold text-gray-900">
-                Tổng kết đơn hàng
-              </h2>
+        {/* Inline custom item from search */}
+        {searchTrimmed && (
+          <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <p className="text-sm font-medium text-amber-800 mb-2">
+              Thêm "<span className="font-bold">{searchTrimmed}</span>" làm món mới
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                value={customItemPrice}
+                onChange={e => setCustomItemPrice(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddCustomFromSearch()}
+                placeholder="Giá tiền (VND)"
+                className="flex-1 px-3 py-2 border border-amber-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm"
+              />
+              <button
+                onClick={handleAddCustomFromSearch}
+                disabled={!customItemPrice || isNaN(parseFloat(customItemPrice))}
+                className="px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-1 transition-colors"
+              >
+                <Plus size={14} />
+                Thêm
+              </button>
             </div>
-            
-            <div className="space-y-2 mb-4">
-              {billSummary.items.map((item) => (
-                <div key={item.menuItemId} className="flex justify-between text-sm">
-                  <span className="text-gray-600">
-                    {item.name} x{item.quantity}
-                  </span>
-                  <span className="font-medium">
-                    {formatCurrency(item.revenue)}
-                  </span>
-                </div>
-              ))}
-
-              {customItems.map(item => (
-                <div key={item.id} className="flex justify-between text-sm">
-                  <span className="text-gray-600">
-                    {item.customDescription}
-                  </span>
-                  <span
-                    className={`font-medium ${
-                      item.customAmount >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}
-                  >
-                    {item.customAmount >= 0 ? '+' : ''}
-                    {formatCurrency(item.customAmount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-            
-            <div className="border-t pt-4 space-y-2">
-              <div className="flex justify-between font-semibold text-lg">
-                <span>Tổng cộng:</span>
-                <span className="text-indigo-600">
-                  {formatCurrency(totalRevenueWithCustom)}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm text-gray-600">
-                <span>Lợi nhuận dự kiến:</span>
-                <span className="text-green-600 font-medium">
-                  {formatCurrency(totalProfitWithCustom)}
-                </span>
-              </div>
-            </div>
-            
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting || !selectedTable}
-              className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center"
-            >
-              {isSubmitting ? (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  Đang xử lý...
-                </div>
-              ) : (
-                <>
-                  <ShoppingCart size={20} className="mr-2" />
-                  Tạo đơn hàng
-                </>
-              )}
-            </button>
           </div>
         )}
       </div>
+
+      {/* Cart / Bill Summary */}
+      {hasCart && (
+        <div className="bg-white rounded-xl shadow-sm border p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Calculator className="w-5 h-5 text-indigo-600" />
+            <h2 className="text-base font-semibold text-gray-900">Đơn hàng</h2>
+            <span className="ml-auto text-xs text-gray-400">
+              {billSummary.totalItems > 0 && `${billSummary.totalItems} món`}
+              {billSummary.totalItems > 0 && customItems.length > 0 && ' + '}
+              {customItems.length > 0 && `${customItems.length} món khác`}
+            </span>
+          </div>
+
+          <div className="space-y-2 mb-4">
+            {billSummary.items.map(item => (
+              <div key={item.menuItemId} className="flex justify-between text-sm">
+                <span className="text-gray-600 truncate mr-2">
+                  {item.name} ×{item.quantity}
+                </span>
+                <span className="font-medium flex-shrink-0">{formatCurrency(item.revenue)}</span>
+              </div>
+            ))}
+
+            {customItems.map(item => (
+              <div key={item.id} className="flex justify-between text-sm items-center">
+                <span className="text-gray-600 truncate mr-2">{item.customDescription}</span>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className={`font-medium ${item.customAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {item.customAmount >= 0 ? '+' : ''}{formatCurrency(item.customAmount)}
+                  </span>
+                  <button
+                    onClick={() => setCustomItems(prev => prev.filter(c => c.id !== item.id))}
+                    className="text-gray-300 hover:text-red-500 transition-colors"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t pt-3 space-y-1 mb-4">
+            <div className="flex justify-between font-bold text-base">
+              <span>Tổng cộng:</span>
+              <span className="text-indigo-600">{formatCurrency(totalRevenueWithCustom)}</span>
+            </div>
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>Lợi nhuận dự kiến:</span>
+              <span className="text-green-600 font-medium">{formatCurrency(totalProfitWithCustom)}</span>
+            </div>
+          </div>
+
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+          >
+            {isSubmitting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                Đang xử lý...
+              </>
+            ) : (
+              <>
+                <ShoppingCart size={18} />
+                Tạo đơn — Bàn {tableNumber}
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* Customer Order Modal */}
       {showCustomerOrderModal && (
@@ -538,4 +609,4 @@ const CreateBill = () => {
   );
 };
 
-export default CreateBill; 
+export default CreateBill;
