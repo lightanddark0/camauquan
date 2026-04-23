@@ -8,6 +8,7 @@ import CustomerPageModal from '../components/CustomerPageModal';
 import { Plus, Minus, ShoppingCart, Calculator, ExternalLink, Search, ArrowLeft, X } from 'lucide-react';
 import { VoiceOrderButton } from '../components/VoiceOrderButton';
 import { getVoiceOrderMetrics } from '../utils/voiceOrderMetrics';
+import { deductStockForBill } from '../utils/inventoryUtils';
 
 const CreateBill = () => {
   const { menuItems, tables } = useApp();
@@ -213,6 +214,15 @@ const CreateBill = () => {
         });
 
         toast.success('Đã thêm món vào đơn hiện tại!');
+
+        // Auto-deduct stock (fire-and-forget)
+        import('../context/InventoryContext').catch(() => {});
+        import('firebase/firestore').then(({ collection: col, getDocs: gd }) => {
+          gd(col(db, 'recipes')).then(snap => {
+            const recipes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            deductStockForBill(existingBill.id, newMenuItems, recipes).catch(console.error);
+          });
+        }).catch(() => {});
       } else {
         // Tạo đơn mới
         await addDoc(collection(db, 'bills'), {
@@ -228,6 +238,14 @@ const CreateBill = () => {
         });
 
         toast.success('Tạo đơn hàng thành công!');
+
+        // Auto-deduct stock (fire-and-forget)
+        import('firebase/firestore').then(({ collection: col, getDocs: gd }) => {
+          gd(col(db, 'recipes')).then(snap => {
+            const recipes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            deductStockForBill('new-bill', newMenuItems, recipes).catch(console.error);
+          });
+        }).catch(() => {});
       }
 
       // Reset form

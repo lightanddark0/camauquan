@@ -359,6 +359,21 @@ export const submitCustomerOrder = async (
       // ⚠️ IMPORTANT: Timing creation failure KHÔNG được làm fail order
       console.error('MenuItemTimings creation failed, but order was successful:', timingError);
     }
+
+    // ✅ Auto-deduct stock for customer orders (non-blocking)
+    try {
+      const { getDocs: gd, collection: col } = await import('firebase/firestore');
+      const [recipesSnap, orderItemsSnap] = await Promise.all([
+        gd(col(db, 'recipes')),
+        gd(col(db, 'orderItems'))
+      ]);
+      const recipes = recipesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const allOrderItems = orderItemsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const { deductStockForCustomerOrder } = await import('./inventoryUtils');
+      await deductStockForCustomerOrder(billId, items, allOrderItems, recipes);
+    } catch (stockError) {
+      console.error('Stock deduction failed, but order was successful:', stockError);
+    }
     
     return billId;
     

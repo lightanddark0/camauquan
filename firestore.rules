@@ -54,5 +54,35 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;  // Chỉ admin qua backend
     }
+    
+    // Rules cho collection inventoryItems (quản lý kho)
+    match /inventoryItems/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Rules cho collection stockTransactions (lịch sử nhập/xuất kho)
+    match /stockTransactions/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Rules cho collection recipes (công thức món ăn)
+    match /recipes/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Rules cho collection customUnits (đơn vị tính tùy chỉnh)
+    match /customUnits/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Rules cho collection expenses (chi tiêu)
+    match /expenses/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 } 

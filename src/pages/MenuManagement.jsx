@@ -6,7 +6,8 @@ import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { toast } from 'react-toastify';
-import { Plus, Edit, Trash2, X, Save, UtensilsCrossed, Table2, ShoppingBag, Upload, ImageIcon, GripVertical, LayoutGrid, List } from 'lucide-react';
+import { Plus, Edit, Trash2, X, Save, UtensilsCrossed, Table2, ShoppingBag, Upload, ImageIcon, GripVertical, LayoutGrid, List, ChefHat } from 'lucide-react';
+import RecipeTab from '../components/RecipeTab';
 import {
   DndContext,
   closestCenter,
@@ -134,7 +135,8 @@ const tableSchema = yup.object({
 const TABS = [
   { id: 'menu', label: 'Menu', icon: UtensilsCrossed },
   { id: 'orderItems', label: 'Món đặt hàng', icon: ShoppingBag },
-  { id: 'tables', label: 'Bàn', icon: Table2 }
+  { id: 'tables', label: 'Bàn', icon: Table2 },
+  { id: 'recipes', label: 'Công thức', icon: ChefHat }
 ];
 
 // ── Draggable card dùng trong Layout Editor ──
@@ -568,7 +570,7 @@ const MenuManagement = () => {
               </div>
             )}
             {/* Right: add button (hidden in layout mode) */}
-            {!layoutMode && (
+            {!layoutMode && activeTab !== 'recipes' && (
               <button
                 onClick={() => openModal(null, activeTab)}
                 className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors ml-auto"
@@ -578,6 +580,9 @@ const MenuManagement = () => {
               </button>
             )}
           </div>
+
+          {/* Recipe Tab Content */}
+          {activeTab === 'recipes' && <RecipeTab />}
 
           {/* Menu Tab Content */}
           {activeTab === 'menu' && (

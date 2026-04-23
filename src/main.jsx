@@ -5,7 +5,9 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 import { AppProvider, useApp } from './context/AppContext';
+import { InventoryProvider } from './context/InventoryContext';
 import Layout from './components/Layout';
+import InventoryLayout from './components/InventoryLayout';
 import PasswordGate from './components/PasswordGate';
 import CreateBill from './pages/CreateBill';
 import TableSelection from './pages/TableSelection';
@@ -18,6 +20,13 @@ import PublicBill from './pages/PublicBill';
 import CustomerOrder from './pages/CustomerOrder';
 import OrderSuccess from './pages/OrderSuccess';
 import TakeawayOrder from './pages/TakeawayOrder';
+import InventoryDashboard from './pages/inventory/InventoryDashboard';
+import InventoryItems from './pages/inventory/InventoryItems';
+import StockIn from './pages/inventory/StockIn';
+import StockOut from './pages/inventory/StockOut';
+import StockHistory from './pages/inventory/StockHistory';
+import ExpenseList from './pages/inventory/ExpenseList';
+import ExpenseReport from './pages/inventory/ExpenseReport';
 import { initVoiceOrderMetrics } from './utils/voiceOrderMetrics';
 
 import './index.css';
@@ -60,6 +69,31 @@ const ProtectedRoutes = () => {
   );
 };
 
+// Inventory Routes (layout riêng, cần authentication)
+const InventoryRoutes = () => {
+  const { isAuthenticated } = useApp();
+
+  if (!isAuthenticated) {
+    return <PasswordGate />;
+  }
+
+  return (
+    <InventoryProvider>
+      <InventoryLayout>
+        <Routes>
+          <Route path="/inventory" element={<InventoryDashboard />} />
+          <Route path="/inventory/items" element={<InventoryItems />} />
+          <Route path="/inventory/stock-in" element={<StockIn />} />
+          <Route path="/inventory/stock-out" element={<StockOut />} />
+          <Route path="/inventory/history" element={<StockHistory />} />
+          <Route path="/inventory/expenses" element={<ExpenseList />} />
+          <Route path="/inventory/expense-report" element={<ExpenseReport />} />
+        </Routes>
+      </InventoryLayout>
+    </InventoryProvider>
+  );
+};
+
 // Main App component with route handling
 const App = () => {
   const currentPath = window.location.pathname;
@@ -69,6 +103,11 @@ const App = () => {
       currentPath.startsWith('/order') ||
       currentPath.startsWith('/takeaway')) {
     return <PublicRoutes />;
+  }
+
+  // Check if current path is inventory route
+  if (currentPath.startsWith('/inventory')) {
+    return <InventoryRoutes />;
   }
 
   // Otherwise, render protected routes

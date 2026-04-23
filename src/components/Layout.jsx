@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LogOut, Menu, X, Home, ShoppingCart, FileText, BarChart3, QrCode, PieChart } from 'lucide-react';
+import { LogOut, Menu, X, Home, ShoppingCart, FileText, BarChart3, QrCode, PieChart, Warehouse } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useState } from 'react';
 
@@ -15,7 +15,8 @@ const Layout = ({ children }) => {
     { path: '/reports', label: 'Báo cáo', icon: BarChart3 },
     { path: '/dish-analysis', label: 'Tổng kết món', icon: PieChart },
     { path: '/menu', label: 'Quản lý menu', icon: ShoppingCart },
-    { path: '/qr', label: 'QR Code thanh toán', icon: QrCode }
+    { path: '/qr', label: 'QR Code thanh toán', icon: QrCode },
+    { path: '/inventory', label: 'Quản lý kho', icon: Warehouse, external: true }
   ];
 
   const handleLogout = () => {
@@ -44,6 +45,19 @@ const Layout = ({ children }) => {
           <nav className="px-4 py-2">
             {navigationItems.map((item) => {
               const Icon = item.icon;
+              if (item.external) {
+                return (
+                  <a
+                    key={item.path}
+                    href={item.path}
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                  >
+                    <Icon size={18} className="mr-3" />
+                    {item.label}
+                  </a>
+                );
+              }
               return (
                 <NavLink
                   key={item.path}
@@ -86,6 +100,18 @@ const Layout = ({ children }) => {
               <nav className="flex-1 px-4 py-4 space-y-1">
                 {navigationItems.map((item) => {
                   const Icon = item.icon;
+                  if (item.external) {
+                    return (
+                      <a
+                        key={item.path}
+                        href={item.path}
+                        className="flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                      >
+                        <Icon size={18} className="mr-3" />
+                        {item.label}
+                      </a>
+                    );
+                  }
                   return (
                     <NavLink
                       key={item.path}
